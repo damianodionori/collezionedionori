@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Numismatica Mondiale - La Nostra Collezione</title>
+    <style>
+        :root {
+            --primary-color: #8b714a;
+            --secondary-color: #d4c19c;
+            --dark-color: #2c2418;
+            --light-color: #f5f0e6;
+            --accent-color: #c1a87c;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--light-color);
+            color: var(--dark-color);
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.3)), url("/api/placeholder/1600/300");
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        nav {
+            background-color: var(--dark-color);
+            display: flex;
+            justify-content: center;
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1.5rem;
+            margin: 0 0.5rem;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        nav a:hover {
+            background-color: var(--primary-color);
+        }
+        
+        .active {
+            background-color: var(--primary-color);
+        }
+        
+        main {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .hero h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+        
+        .hero p {
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            max-width: 800px;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-box {
+            background-color: var(--secondary-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            width: 200px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-box h3 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--dark-color);
+        }
+        
+        .collection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .collection-item {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .collection-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .collection-image {
+            height: 200px;
+            width: 100%;
+            background-color: var(--secondary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .collection-info {
+            padding: 1.5rem;
+        }
+        
+        .collection-info h3 {
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+        
+        .collection-info p {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .collection-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            color: #888;
+            font-size: 0.8rem;
+        }
+        
+        .filter-section {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .filter-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .filter-control {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            font-size: 0.9rem;
+        }
+        
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: var(--accent-color);
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+        
+        .pagination button {
+            margin: 0 0.25rem;
+            background-color: var(--secondary-color);
+            color: var(--dark-color);
+        }
+        
+        .pagination button.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        footer {
+            background-color: var(--dark-color);
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        
+        .footer-section {
+            margin: 1rem;
+            min-width: 200px;
+            flex: 1;
+        }
+        
+        .footer-section h3 {
+            margin-bottom: 1rem;
+            color: var(--secondary-color);
+        }
+        
+        .footer-section ul {
+            list-style: none;
+        }
+        
+        .footer-section ul li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .footer-section a {
+            color: #ccc;
+            text-decoration: none;
+        }
+        
+        .footer-section a:hover {
+            color: white;
+            text-decoration: underline;
+        }
+        
+        .copyright {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #444;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            nav a {
+                margin: 0.25rem 0;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .stats {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .collection-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">Numismatica Mondiale</div>
+        <p>La collezione di monete e banconote da tutto il mondo</p>
+    </header>
+    
+    <nav>
+        <a href="#" class="active">Home</a>
+        <a href="#">Monete</a>
+        <a href="#">Banconote</a>
+        <a href="#">Paesi</a>
+        <a href="#">Epoche</a>
+        <a href="#">Statistiche</a>
+        <a href="#">Contatti</a>
+    </nav>
+    
+    <main>
+        <section class="hero">
+            <h2>Benvenuti nella nostra collezione numismatica</h2>
+            <p>Esplora la nostra passione per la storia mondiale attraverso monete e banconote. 
+               Ogni pezzo racchiude una storia, un'epoca e un patrimonio culturale unico. 
+               La nostra collezione comprende pezzi provenienti da tutti i continenti e da diverse epoche storiche.</p>
+            <button>Esplora la collezione</button>
+        </section>
+        
+        <section class="stats">
+            <div class="stat-box">
+                <h3>576</h3>
+                <p>Monete</p>
+            </div>
+            <div class="stat-box">
+                <h3>342</h3>
+                <p>Banconote</p>
+            </div>
+            <div class="stat-box">
+                <h3>127</h3>
+                <p>Paesi</p>
+            </div>
+            <div class="stat-box">
+                <h3>12</h3>
+                <p>Epoche</p>
+            </div>
+        </section>
+        
+        <section class="filter-section">
+            <h2>Esplora la collezione</h2>
+            <div class="filter-controls">
+                <input type="text" class="search-box" placeholder="Cerca per nome, paese, anno...">
+                <select class="filter-control">
+                    <option value="">Tutti i tipi</option>
+                    <option value="monete">Monete</option>
+                    <option value="banconote">Banconote</option>
+                </select>
+                <select class="filter-control">
+                    <option value="">Tutti i paesi</option>
+                    <option value="italia">Italia</option>
+                    <option value="germania">Germania</option>
+                    <option value="francia">Francia</option>
+                    <option value="giappone">Giappone</option>
+                    <option value="usa">Stati Uniti</option>
+                </select>
+                <select class="filter-control">
+                    <option value="">Tutte le epoche</option>
+                    <option value="antica">Antica</option>
+                    <option value="medievale">Medievale</option>
+                    <option value="moderna">Moderna</option>
+                    <option value="contemporanea">Contemporanea</option>
+                </select>
+                <button>Filtra</button>
+            </div>
+        </section>
+        
+        <section class="collection-grid">
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="Lira Italiana">
+                </div>
+                <div class="collection-info">
+                    <h3>Lira Italiana - 1000</h3>
+                    <p>Italia</p>
+                    <p>Emissione: 1990</p>
+                    <p>Una delle ultime banconote della lira italiana prima dell'introduzione dell'euro.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Ottima</span>
+                        <span>Aggiunta: 12/03/2025</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="50 Pfennig">
+                </div>
+                <div class="collection-info">
+                    <h3>50 Pfennig</h3>
+                    <p>Germania</p>
+                    <p>Emissione: 1950</p>
+                    <p>Moneta della Germania Ovest del periodo post-bellico, con rappresentazione di una quercia.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Buona</span>
+                        <span>Aggiunta: 05/02/2025</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="5 Yen">
+                </div>
+                <div class="collection-info">
+                    <h3>5 Yen</h3>
+                    <p>Giappone</p>
+                    <p>Emissione: 1989</p>
+                    <p>Moneta giapponese considerata portafortuna, con il caratteristico foro centrale.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Eccellente</span>
+                        <span>Aggiunta: 18/01/2025</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="100 Franchi">
+                </div>
+                <div class="collection-info">
+                    <h3>100 Franchi</h3>
+                    <p>Francia</p>
+                    <p>Emissione: 1977</p>
+                    <p>Banconota francese con ritratto del compositore Eugène Delacroix.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Buona</span>
+                        <span>Aggiunta: 25/03/2025</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="Half Dollar Kennedy">
+                </div>
+                <div class="collection-info">
+                    <h3>Half Dollar Kennedy</h3>
+                    <p>Stati Uniti</p>
+                    <p>Emissione: 1964</p>
+                    <p>Prima emissione della moneta commemorativa dedicata a JFK, in argento al 90%.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Molto buona</span>
+                        <span>Aggiunta: 10/02/2025</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-item">
+                <div class="collection-image">
+                    <img src="/api/placeholder/280/200" alt="1 Yuan">
+                </div>
+                <div class="collection-info">
+                    <h3>1 Yuan</h3>
+                    <p>Cina</p>
+                    <p>Emissione: 1999</p>
+                    <p>Moneta moderna cinese con caratteristiche incisioni floreali.</p>
+                    <div class="collection-meta">
+                        <span>Condizione: Eccellente</span>
+                        <span>Aggiunta: 15/03/2025</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <div class="pagination">
+            <button>1</button>
+            <button>2</button>
+            <button>3</button>
+            <button>...</button>
+            <button>10</button>
+            <button>→</button>
+        </div>
+    </main>
+    
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>Numismatica Mondiale</h3>
+                <p>Una passione per le monete e banconote dal mondo, condivisa tra fratelli.</p>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Navigazione</h3>
+                <ul>
+                    <li><a href="#">Home</a></li>
+                    <li><a href="#">Monete</a></li>
+                    <li><a href="#">Banconote</a></li>
+                    <li><a href="#">Paesi</a></li>
+                    <li><a href="#">Epoche</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Contatti</h3>
+                <ul>
+                    <li><a href="#">Email</a></li>
+                    <li><a href="#">Facebook</a></li>
+                    <li><a href="#">Instagram</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="copyright">
+            © 2025 Numismatica Mondiale - Tutti i diritti riservati
+        </div>
+    </footer>
+</body>
+</html>
