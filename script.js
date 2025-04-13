@@ -327,8 +327,38 @@ function showEditItemForm(id) {
     showModal();
 }
 
+// Gestione del menu hamburger
+function setupMobileMenu() {
+    const menuToggle = document.getElementById('menuToggle');
+    const navLinks = document.querySelector('.nav-links');
+
+    menuToggle.addEventListener('click', () => {
+        menuToggle.classList.toggle('active');
+        navLinks.classList.toggle('show');
+    });
+
+    // Chiudi il menu quando si clicca su un link
+    document.querySelectorAll('.nav-links a').forEach(link => {
+        link.addEventListener('click', () => {
+            menuToggle.classList.remove('active');
+            navLinks.classList.remove('show');
+        });
+    });
+
+    // Chiudi il menu quando si clicca fuori
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('nav')) {
+            menuToggle.classList.remove('active');
+            navLinks.classList.remove('show');
+        }
+    });
+}
+
 // Inizializzazione
 document.addEventListener('DOMContentLoaded', () => {
+    // Setup del menu mobile
+    setupMobileMenu();
+    
     // Controllo autenticazione
     checkAuthStatus();
     
