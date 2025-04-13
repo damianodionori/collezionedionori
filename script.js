@@ -16,7 +16,7 @@ const appState = {
 // Configurazione utenti autorizzati (in un'app reale questo dovrebbe essere nel backend)
 const authorizedUsers = {
     'Damiano': '28011991', // Cambia con credenziali sicure
-    'Dario': '06011999'  // Cambia con credenziali sicure
+    'Dario': 'hoilfratellomigliorealmondo'  // Cambia con credenziali sicure
 };
 
 // Sistema di autenticazione
