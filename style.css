@@ -587,3 +587,43 @@ footer {
         transform: rotate(-45deg) translate(7px, -7px);
     }
 }
+
+/* Stili per il campo password */
+.password-field {
+    position: relative;
+    width: 100%;
+}
+
+.password-field input {
+    width: 100%;
+    padding-right: 40px; /* Spazio per il pulsante */
+}
+
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    color: var(--dark-color);
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+}
+
+.password-toggle-icon {
+    font-style: normal;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+/* Stile quando la password è visibile */
+.password-toggle.active {
+    color: var(--primary-color);
+}

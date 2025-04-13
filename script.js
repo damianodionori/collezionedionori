@@ -354,8 +354,28 @@ function setupMobileMenu() {
     });
 }
 
+// Gestione della visibilità della password
+function setupPasswordToggle() {
+    const passwordField = document.querySelector('input[type="password"]');
+    const toggleButton = document.querySelector('.password-toggle');
+    const toggleIcon = document.querySelector('.password-toggle-icon');
+
+    toggleButton.addEventListener('click', () => {
+        // Cambia il tipo dell'input
+        const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordField.setAttribute('type', type);
+        
+        // Aggiorna l'icona e lo stato del pulsante
+        toggleButton.classList.toggle('active');
+        toggleIcon.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
+    });
+}
+
 // Inizializzazione
 document.addEventListener('DOMContentLoaded', () => {
+    // Setup della visibilità della password
+    setupPasswordToggle();
+    
     // Setup del menu mobile
     setupMobileMenu();
     
