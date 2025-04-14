@@ -1,3 +1,8 @@
+// Inizializzazione del client Supabase
+const supabaseUrl = 'https://saofewzchoidfzozcuhd.supabase.co'
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhb2Zld3pjaG9pZGZ6b3pjdWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2NDk3MTMsImV4cCI6MjA2MDIyNTcxM30.y5nu8tXZa2GojVWjye9RLP4633v2dFPJ5IID8h8PRUc'
+const supabase = window.createClient(supabaseUrl, supabaseKey)
+
 // Gestione dello stato dell'applicazione
 const appState = {
     isAuthenticated: false,
@@ -13,37 +18,64 @@ const appState = {
     }
 };
 
-// Configurazione utenti autorizzati (in un'app reale questo dovrebbe essere nel backend)
-const authorizedUsers = {
-    'Damiano': '28011991', // Cambia con credenziali sicure
-    'Dario': '06011999'  // Cambia con credenziali sicure
+// Mapping degli utenti autorizzati
+const authorizedEmails = {
+    'd.dionori@gmail.com': 'Damiano',
+    'dariodionori99@gmail.com': 'Dario'
 };
 
 // Sistema di autenticazione
-function login(username, password) {
-    if (authorizedUsers[username] === password) {
+async function login(email, password) {
+    try {
+        console.log('Tentativo di login con:', email);
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+        
+        if (error) {
+            console.error('Errore di login:', error.message);
+            return false;
+        }
+        
+        console.log('Login riuscito:', data);
         appState.isAuthenticated = true;
-        appState.currentUser = username;
-        localStorage.setItem('currentUser', username);
+        appState.currentUser = {
+            ...data.user,
+            displayName: authorizedEmails[email] || email
+        };
         updateUIForAuthenticatedUser();
+        await loadCollection();
         return true;
+    } catch (error) {
+        console.error('Errore durante il login:', error);
+        return false;
     }
-    return false;
 }
 
-function logout() {
-    appState.isAuthenticated = false;
-    appState.currentUser = null;
-    localStorage.removeItem('currentUser');
-    updateUIForUnauthenticatedUser();
+async function logout() {
+    try {
+        const { error } = await supabase.auth.signOut()
+        if (error) throw error
+        
+        appState.isAuthenticated = false
+        appState.currentUser = null
+        updateUIForUnauthenticatedUser()
+    } catch (error) {
+        console.error('Errore durante il logout:', error.message)
+    }
 }
 
-function checkAuthStatus() {
-    const currentUser = localStorage.getItem('currentUser');
-    if (currentUser && authorizedUsers[currentUser]) {
-        appState.isAuthenticated = true;
-        appState.currentUser = currentUser;
-        updateUIForAuthenticatedUser();
+async function checkAuthStatus() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            appState.isAuthenticated = true
+            appState.currentUser = user
+            updateUIForAuthenticatedUser()
+        }
+    } catch (error) {
+        console.error('Errore nel controllo dello stato di autenticazione:', error.message)
     }
 }
 
@@ -110,67 +142,224 @@ function setupImageDropZone() {
     };
 }
 
-// Gestione della collezione
-function addItem(item) {
-    if (!appState.isAuthenticated) return false;
-    
-    const newItem = {
-        ...item,
-        id: Date.now(),
-        addedBy: appState.currentUser,
-        addedDate: new Date().toISOString()
-    };
-    
-    if (item.imageFile) {
-        // Converti l'immagine in base64 per il salvataggio
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            newItem.imageData = e.target.result;
-            appState.collection.push(newItem);
-            saveCollection();
-            renderCollection();
-            updateStats();
-        };
-        reader.readAsDataURL(item.imageFile);
-    } else {
-        appState.collection.push(newItem);
-        saveCollection();
-        renderCollection();
-        updateStats();
+// Funzione per caricare la collezione
+async function loadCollection() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('collection')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('id', { ascending: true });
+
+    if (error) {
+        console.error('Error loading collection:', error);
+        return;
     }
-    
-    return true;
+
+    appState.collection = data || [];
+    renderCollection();
 }
 
-function editItem(id, updates) {
-    if (!appState.isAuthenticated) return false;
-    
+// Funzione per aggiungere un elemento
+async function addItem(item) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('collection')
+        .insert([
+            {
+                user_id: user.id,
+                name: item.name,
+                description: item.description,
+                image: item.image,
+                price: item.price,
+                purchase_date: item.purchaseDate,
+                condition: item.condition,
+                notes: item.notes
+            }
+        ])
+        .select();
+
+    if (error) {
+        console.error('Error adding item:', error);
+        return;
+    }
+
+    appState.collection.push(data[0]);
+    renderCollection();
+}
+
+// Funzione per aggiornare un elemento
+async function updateItem(id, updatedItem) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+        .from('collection')
+        .update({
+            name: updatedItem.name,
+            description: updatedItem.description,
+            image: updatedItem.image,
+            price: updatedItem.price,
+            purchase_date: updatedItem.purchaseDate,
+            condition: updatedItem.condition,
+            notes: updatedItem.notes
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error('Error updating item:', error);
+        return;
+    }
+
     const index = appState.collection.findIndex(item => item.id === id);
-    if (index === -1) return false;
-    
-    appState.collection[index] = {
-        ...appState.collection[index],
-        ...updates,
-        lastModified: new Date().toISOString()
+    if (index !== -1) {
+        appState.collection[index] = { ...appState.collection[index], ...updatedItem };
+        renderCollection();
+    }
+}
+
+// Funzione per eliminare un elemento
+async function deleteItem(id) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+        .from('collection')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error('Error deleting item:', error);
+        return;
+    }
+
+    appState.collection = appState.collection.filter(item => item.id !== id);
+    renderCollection();
+}
+
+// Funzione per cercare nella collezione
+async function searchCollection(query) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('collection')
+        .select('*')
+        .eq('user_id', user.id)
+        .or(`name.ilike.%${query}%,description.ilike.%${query}%,notes.ilike.%${query}%`);
+
+    if (error) {
+        console.error('Error searching collection:', error);
+        return;
+    }
+
+    return data || [];
+}
+
+// Funzione per ordinare la collezione
+async function sortCollection(field, direction) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('collection')
+        .select('*')
+        .eq('user_id', user.id)
+        .order(field, { ascending: direction === 'asc' });
+
+    if (error) {
+        console.error('Error sorting collection:', error);
+        return;
+    }
+
+    appState.collection = data || [];
+    renderCollection();
+}
+
+// Funzione per esportare la collezione
+async function exportCollection() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('collection')
+        .select('*')
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error('Error exporting collection:', error);
+        return;
+    }
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'collezione.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Funzione per importare la collezione
+async function importCollection(file) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const items = JSON.parse(e.target.result);
+            
+            // Elimina tutti gli elementi esistenti
+            const { error: deleteError } = await supabase
+                .from('collection')
+                .delete()
+                .eq('user_id', user.id);
+
+            if (deleteError) {
+                console.error('Error clearing collection:', deleteError);
+                return;
+            }
+
+            // Inserisci i nuovi elementi
+            const { data, error: insertError } = await supabase
+                .from('collection')
+                .insert(
+                    items.map(item => ({
+                        user_id: user.id,
+                        name: item.name,
+                        description: item.description,
+                        image: item.image,
+                        price: item.price,
+                        purchase_date: item.purchase_date,
+                        condition: item.condition,
+                        notes: item.notes
+                    }))
+                )
+                .select();
+
+            if (insertError) {
+                console.error('Error importing collection:', insertError);
+                return;
+            }
+
+            appState.collection = data || [];
+            renderCollection();
+            alert('Collezione importata con successo!');
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            alert('Errore durante l\'importazione della collezione');
+        }
     };
-    
-    saveCollection();
-    renderCollection();
-    updateStats();
-    return true;
-}
-
-function deleteItem(id) {
-    if (!appState.isAuthenticated) return false;
-    
-    const index = appState.collection.findIndex(item => item.id === id);
-    if (index === -1) return false;
-    
-    appState.collection.splice(index, 1);
-    saveCollection();
-    renderCollection();
-    updateStats();
-    return true;
+    reader.readAsText(file);
 }
 
 // Gestione dei filtri
@@ -271,26 +460,34 @@ function saveCollection() {
     localStorage.setItem('collection', JSON.stringify(appState.collection));
 }
 
-function loadCollection() {
-    const saved = localStorage.getItem('collection');
-    if (saved) {
-        appState.collection = JSON.parse(saved);
-        renderCollection();
-        updateStats();
+// Aggiornamento UI in base allo stato di autenticazione
+function updateUIForAuthenticatedUser() {
+    document.querySelector('.auth-hidden').style.display = 'none';
+    document.getElementById('userInfo').style.display = 'flex';
+    document.getElementById('userName').textContent = appState.currentUser.displayName;
+    
+    // Aggiungi il pulsante per aggiungere nuovi elementi
+    const header = document.querySelector('.hero');
+    if (!document.getElementById('addItemButton')) {
+        const addButton = document.createElement('button');
+        addButton.id = 'addItemButton';
+        addButton.textContent = 'Aggiungi Elemento';
+        addButton.onclick = showAddItemForm;
+        addButton.style.marginTop = '1rem';
+        header.appendChild(addButton);
     }
 }
 
-// Aggiornamento UI in base allo stato di autenticazione
-function updateUIForAuthenticatedUser() {
-    document.querySelectorAll('.auth-required').forEach(el => el.style.display = 'block');
-    document.querySelectorAll('.auth-hidden').forEach(el => el.style.display = 'none');
-    // Aggiungere qui altri elementi UI per utenti autenticati
-}
-
 function updateUIForUnauthenticatedUser() {
-    document.querySelectorAll('.auth-required').forEach(el => el.style.display = 'none');
-    document.querySelectorAll('.auth-hidden').forEach(el => el.style.display = 'block');
-    // Aggiungere qui altri elementi UI per utenti non autenticati
+    document.querySelector('.auth-hidden').style.display = 'block';
+    document.getElementById('userInfo').style.display = 'none';
+    document.getElementById('userName').textContent = '';
+    
+    // Rimuovi il pulsante per aggiungere elementi
+    const addButton = document.getElementById('addItemButton');
+    if (addButton) {
+        addButton.remove();
+    }
 }
 
 // Gestione del modal
@@ -402,15 +599,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Setup form di login
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = e.target.username.value;
+        const email = e.target.email.value;
         const password = e.target.password.value;
         
-        if (login(username, password)) {
-            e.target.reset();
-        } else {
-            alert('Credenziali non valide');
+        try {
+            const success = await login(email, password);
+            if (success) {
+                e.target.reset();
+            } else {
+                alert('Credenziali non valide');
+            }
+        } catch (error) {
+            console.error('Errore durante il login:', error);
+            alert('Errore durante il login');
         }
     });
     
@@ -432,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemId = e.target.itemId.value;
         
         if (itemId) {
-            editItem(parseInt(itemId), formData);
+            updateItem(parseInt(itemId), formData);
         } else {
             addItem(formData);
         }
