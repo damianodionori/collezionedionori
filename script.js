@@ -70,12 +70,19 @@ async function checkAuthStatus() {
     try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-            appState.isAuthenticated = true
-            appState.currentUser = user
-            updateUIForAuthenticatedUser()
+            appState.isAuthenticated = true;
+            appState.currentUser = {
+                ...user,
+                displayName: authorizedEmails[user.email] || user.email
+            };
+            updateUIForAuthenticatedUser();
+            await loadCollection();
+        } else {
+            updateUIForUnauthenticatedUser();
         }
     } catch (error) {
         console.error('Errore nel controllo dello stato di autenticazione:', error.message)
+        updateUIForUnauthenticatedUser();
     }
 }
 
@@ -154,12 +161,6 @@ function setupImageDropZone() {
 
 // Funzione per caricare la collezione
 async function loadCollection() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Ottieni gli ID di tutti gli utenti autorizzati
-    const authorizedUserIds = Object.keys(authorizedEmails);
-    
     // Carica gli elementi di tutti gli utenti autorizzati
     const { data, error } = await supabase
         .from('collection')
@@ -248,11 +249,14 @@ async function deleteItem(id) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Verifica se l'utente è autorizzato
+    const userEmail = user.email;
+    if (!(userEmail in authorizedEmails)) return;
+
     const { error } = await supabase
         .from('collection')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
     if (error) {
         console.error('Error deleting item:', error);
@@ -467,7 +471,7 @@ function createItemElement(item) {
                 <span>Aggiunta da: ${item.added_by || 'Sconosciuto'}</span>
                 <span>Data: ${new Date(item.added_date).toLocaleDateString()}</span>
             </div>
-            ${appState.isAuthenticated && item.user_id === appState.currentUser.id ? `
+            ${appState.isAuthenticated && appState.currentUser.email in authorizedEmails ? `
                 <div class="item-actions">
                     <button onclick="showEditItemForm(${item.id})">Modifica</button>
                     <button onclick="deleteItem(${item.id})">Elimina</button>
@@ -526,6 +530,9 @@ function updateUIForUnauthenticatedUser() {
     if (addButton) {
         addButton.remove();
     }
+
+    // Ricarica la collezione
+    loadCollection();
 }
 
 // Gestione del modal

@@ -313,9 +313,16 @@ footer {
 }
 
 .copyright {
-    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #ccc;
+    font-size: 0.9rem;
+}
+
+.credits {
+    margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid #444;
+    color: #ccc;
     font-size: 0.9rem;
 }
 
@@ -350,47 +357,109 @@ footer {
 /* Stili per il form di login */
 .login-form {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 1rem;
-    max-width: 300px;
-    margin: 1.5rem auto;
-    background-color: rgba(255, 255, 255, 0.1);
-    padding: 2rem;
-    border-radius: 8px;
-    backdrop-filter: blur(5px);
+    max-width: 800px;
+    margin: 2rem auto;
+    background: linear-gradient(145deg, rgba(139, 113, 74, 0.8), rgba(193, 168, 124, 0.9));
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.login-form .form-group {
+    flex: 1;
+    margin: 0;
 }
 
 .login-form input {
-    padding: 0.8rem 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
+    width: 100%;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 6px;
     font-size: 1rem;
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: rgba(255, 255, 255, 0.95);
     transition: all 0.3s ease;
-}
-
-.login-form input:focus {
-    outline: none;
-    border-color: var(--secondary-color);
-    box-shadow: 0 0 0 2px rgba(212, 193, 156, 0.3);
+    color: var(--dark-color);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .login-form button {
-    background-color: var(--secondary-color);
+    align-self: flex-end;
+    background: linear-gradient(to right, var(--secondary-color), var(--accent-color));
     color: var(--dark-color);
     border: none;
-    padding: 0.8rem 1.5rem;
-    border-radius: 4px;
+    padding: 0.8rem 2rem;
+    height: 42px;
+    border-radius: 6px;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-weight: bold;
+    font-weight: 600;
     font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
 }
 
-.login-form button:hover {
-    background-color: var(--accent-color);
-    transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+.login-form label {
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+    display: block;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Stile per il campo password e il toggle */
+.password-field {
+    position: relative;
+    width: 100%;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: var(--dark-color);
+    opacity: 0.6;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+}
+
+.password-toggle-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+@media (max-width: 768px) {
+    .login-form {
+        flex-direction: column;
+        padding: 1.5rem;
+        max-width: 300px;
+    }
+
+    .login-form .form-group {
+        width: 100%;
+    }
+
+    .login-form button {
+        width: 100%;
+        margin-top: 1rem;
+    }
 }
 
 /* Stili per gli elementi autenticati */
@@ -607,46 +676,6 @@ footer {
     .hamburger-menu.active .hamburger-line:nth-child(3) {
         transform: rotate(-45deg) translate(7px, -7px);
     }
-}
-
-/* Stili per il campo password */
-.password-field {
-    position: relative;
-    width: 100%;
-}
-
-.password-field input {
-    width: 100%;
-    padding-right: 40px; /* Spazio per il pulsante */
-}
-
-.password-toggle {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    padding: 5px;
-    cursor: pointer;
-    color: var(--dark-color);
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-.password-toggle:hover {
-    opacity: 1;
-}
-
-.password-toggle-icon {
-    font-style: normal;
-    font-size: 1.2rem;
-    line-height: 1;
-}
-
-/* Stile quando la password è visibile */
-.password-toggle.active {
-    color: var(--primary-color);
 }
 
 .user-info {
