@@ -142,15 +142,23 @@ main {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+.collection-images {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
 .collection-image {
+    flex: 1;
     height: 200px;
-    width: 100%;
     background-color: var(--secondary-color);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     position: relative;
+    border-radius: 8px;
 }
 
 .collection-image img {
@@ -159,6 +167,18 @@ main {
     object-fit: contain;
     object-position: center;
     background-color: var(--secondary-color);
+}
+
+.image-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    text-align: center;
+    padding: 4px;
+    font-size: 0.8rem;
 }
 
 .collection-info {
@@ -450,7 +470,7 @@ footer {
 /* Stili per la drop zone */
 .drop-zone {
     width: 100%;
-    min-height: 200px;
+    min-height: 150px;
     border: 2px dashed var(--primary-color);
     border-radius: 8px;
     display: flex;
@@ -460,6 +480,7 @@ footer {
     transition: border-color 0.3s ease, background-color 0.3s ease;
     position: relative;
     background-color: var(--light-color);
+    margin-bottom: 1rem;
 }
 
 .drop-zone.drag-over {

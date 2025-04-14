@@ -81,63 +81,73 @@ async function checkAuthStatus() {
 
 // Gestione delle immagini
 function setupImageDropZone() {
-    const dropZone = document.getElementById('dropZone');
-    const input = document.getElementById('imageInput');
-    const preview = document.getElementById('imagePreview');
-    let currentFile = null;
+    const setupZone = (dropZoneId, inputId, previewId) => {
+        const dropZone = document.getElementById(dropZoneId);
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        let currentFile = null;
 
-    // Trigger input file quando si clicca sulla drop zone
-    dropZone.addEventListener('click', () => input.click());
+        dropZone.addEventListener('click', () => input.click());
 
-    // Gestione del drag & drop
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
 
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('drag-over');
-    });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
 
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
-            handleImage(file);
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImage(file);
+            }
+        });
+
+        input.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleImage(file);
+            }
+        });
+
+        function handleImage(file) {
+            currentFile = file;
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.hidden = false;
+                dropZone.classList.add('has-image');
+            };
+            
+            reader.readAsDataURL(file);
         }
-    });
 
-    // Gestione selezione file tramite input
-    input.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            handleImage(file);
-        }
-    });
-
-    // Funzione per gestire l'immagine selezionata
-    function handleImage(file) {
-        currentFile = file;
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-            preview.src = e.target.result;
-            preview.hidden = false;
-            dropZone.classList.add('has-image');
+        return {
+            getCurrentFile: () => currentFile,
+            reset: () => {
+                currentFile = null;
+                preview.src = '';
+                preview.hidden = true;
+                dropZone.classList.remove('has-image');
+            }
         };
-        
-        reader.readAsDataURL(file);
-    }
+    };
+
+    const frontHandler = setupZone('frontDropZone', 'frontImageInput', 'frontImagePreview');
+    const backHandler = setupZone('backDropZone', 'backImageInput', 'backImagePreview');
 
     return {
-        getCurrentFile: () => currentFile,
+        getFrontFile: () => frontHandler.getCurrentFile(),
+        getBackFile: () => backHandler.getCurrentFile(),
         reset: () => {
-            currentFile = null;
-            preview.src = '';
-            preview.hidden = true;
-            dropZone.classList.remove('has-image');
+            frontHandler.reset();
+            backHandler.reset();
         }
     };
 }
@@ -147,10 +157,13 @@ async function loadCollection() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Ottieni gli ID di tutti gli utenti autorizzati
+    const authorizedUserIds = Object.keys(authorizedEmails);
+    
+    // Carica gli elementi di tutti gli utenti autorizzati
     const { data, error } = await supabase
         .from('collection')
         .select('*')
-        .eq('user_id', user.id)
         .order('id', { ascending: true });
 
     if (error) {
@@ -160,6 +173,7 @@ async function loadCollection() {
 
     appState.collection = data || [];
     renderCollection();
+    updateStats();
 }
 
 // Funzione per aggiungere un elemento
@@ -172,13 +186,17 @@ async function addItem(item) {
         .insert([
             {
                 user_id: user.id,
+                added_by: appState.currentUser.displayName,
                 name: item.name,
                 description: item.description,
-                image: item.image,
-                price: item.price,
-                purchase_date: item.purchaseDate,
+                front_image: item.frontImage,
+                back_image: item.backImage,
+                type: item.type,
+                country: item.country,
+                year: item.year,
                 condition: item.condition,
-                notes: item.notes
+                notes: item.notes,
+                added_date: new Date().toISOString()
             }
         ])
         .select();
@@ -190,6 +208,7 @@ async function addItem(item) {
 
     appState.collection.push(data[0]);
     renderCollection();
+    updateStats();
 }
 
 // Funzione per aggiornare un elemento
@@ -202,7 +221,8 @@ async function updateItem(id, updatedItem) {
         .update({
             name: updatedItem.name,
             description: updatedItem.description,
-            image: updatedItem.image,
+            front_image: updatedItem.frontImage,
+            back_image: updatedItem.backImage,
             price: updatedItem.price,
             purchase_date: updatedItem.purchaseDate,
             condition: updatedItem.condition,
@@ -337,7 +357,8 @@ async function importCollection(file) {
                         user_id: user.id,
                         name: item.name,
                         description: item.description,
-                        image: item.image,
+                        front_image: item.front_image,
+                        back_image: item.back_image,
                         price: item.price,
                         purchase_date: item.purchase_date,
                         condition: item.condition,
@@ -417,19 +438,36 @@ function createItemElement(item) {
     const div = document.createElement('div');
     div.className = 'collection-item';
     div.innerHTML = `
-        <div class="collection-image">
-            <img src="${item.imageData || '/images/placeholder.jpg'}" alt="${item.name}">
+        <div class="collection-images">
+            ${item.front_image ? `
+                <div class="collection-image">
+                    <img src="${item.front_image}" alt="${item.name} - Fronte">
+                    <span class="image-label">Fronte</span>
+                </div>
+            ` : ''}
+            ${item.back_image ? `
+                <div class="collection-image">
+                    <img src="${item.back_image}" alt="${item.name} - Retro">
+                    <span class="image-label">Retro</span>
+                </div>
+            ` : ''}
+            ${!item.front_image && !item.back_image ? `
+                <div class="collection-image no-image">
+                    <span>Nessuna immagine disponibile</span>
+                </div>
+            ` : ''}
         </div>
         <div class="collection-info">
             <h3>${item.name}</h3>
-            <p>${item.country}</p>
-            <p>Emissione: ${item.year}</p>
-            <p>${item.description}</p>
+            ${item.country ? `<p>Paese: ${item.country}</p>` : ''}
+            ${item.year ? `<p>Emissione: ${item.year}</p>` : ''}
+            ${item.description ? `<p>${item.description}</p>` : ''}
             <div class="collection-meta">
-                <span>Condizione: ${item.condition}</span>
-                <span>Aggiunta: ${new Date(item.addedDate).toLocaleDateString()}</span>
+                ${item.condition ? `<span>Condizione: ${item.condition}</span>` : ''}
+                <span>Aggiunta da: ${item.added_by || 'Sconosciuto'}</span>
+                <span>Data: ${new Date(item.added_date).toLocaleDateString()}</span>
             </div>
-            ${appState.isAuthenticated ? `
+            ${appState.isAuthenticated && item.user_id === appState.currentUser.id ? `
                 <div class="item-actions">
                     <button onclick="showEditItemForm(${item.id})">Modifica</button>
                     <button onclick="deleteItem(${item.id})">Elimina</button>
@@ -519,7 +557,8 @@ function showEditItemForm(id) {
     document.getElementById('era').value = item.era;
     document.getElementById('condition').value = item.condition;
     document.getElementById('description').value = item.description;
-    document.getElementById('imageUrl').value = item.imageUrl || '';
+    document.getElementById('frontImageUrl').value = item.front_image || '';
+    document.getElementById('backImageUrl').value = item.back_image || '';
     
     showModal();
 }
@@ -624,12 +663,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = {
             name: e.target.name.value,
             type: e.target.type.value,
-            country: e.target.country.value,
-            year: parseInt(e.target.year.value),
-            era: e.target.era.value,
-            condition: e.target.condition.value,
-            description: e.target.description.value,
-            imageFile: imageHandler.getCurrentFile()
+            country: e.target.country.value || null,
+            year: e.target.year.value ? parseInt(e.target.year.value) : null,
+            condition: e.target.condition.value || null,
+            description: e.target.description.value || null,
+            frontImage: imageHandler.getFrontFile() || null,
+            backImage: imageHandler.getBackFile() || null
         };
         
         const itemId = e.target.itemId.value;
@@ -643,4 +682,21 @@ document.addEventListener('DOMContentLoaded', () => {
         closeModal();
         imageHandler.reset();
     });
+
+    // Aggiornamento stili CSS inline per il caso "nessuna immagine"
+    const style = document.createElement('style');
+    style.textContent = `
+        .collection-image.no-image {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            background-color: var(--secondary-color);
+            color: var(--dark-color);
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+    `;
+    document.head.appendChild(style);
 });

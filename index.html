@@ -174,27 +174,18 @@
                 
                 <div class="form-group">
                     <label for="country">Paese</label>
-                    <input type="text" id="country" name="country" required>
+                    <input type="text" id="country" name="country">
                 </div>
                 
                 <div class="form-group">
                     <label for="year">Anno di Emissione</label>
-                    <input type="number" id="year" name="year" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="era">Epoca</label>
-                    <select id="era" name="era" required>
-                        <option value="antica">Antica</option>
-                        <option value="medievale">Medievale</option>
-                        <option value="moderna">Moderna</option>
-                        <option value="contemporanea">Contemporanea</option>
-                    </select>
+                    <input type="number" id="year" name="year">
                 </div>
                 
                 <div class="form-group">
                     <label for="condition">Condizione</label>
-                    <select id="condition" name="condition" required>
+                    <select id="condition" name="condition">
+                        <option value="">Non specificata</option>
                         <option value="ottima">Ottima</option>
                         <option value="molto-buona">Molto Buona</option>
                         <option value="buona">Buona</option>
@@ -205,18 +196,30 @@
                 
                 <div class="form-group">
                     <label for="description">Descrizione</label>
-                    <textarea id="description" name="description" required></textarea>
+                    <textarea id="description" name="description"></textarea>
                 </div>
                 
                 <div class="form-group">
-                    <label>Immagine</label>
-                    <div id="dropZone" class="drop-zone">
+                    <label>Fronte</label>
+                    <div id="frontDropZone" class="drop-zone">
                         <div class="drop-zone-prompt">
                             <i class="drop-zone-icon">📸</i>
-                            <p>Trascina qui l'immagine o clicca per selezionare</p>
+                            <p>Trascina qui l'immagine del fronte o clicca per selezionare</p>
                         </div>
-                        <input type="file" id="imageInput" name="image" accept="image/*" class="drop-zone-input" hidden>
-                        <img id="imagePreview" class="drop-zone-preview" src="" alt="" hidden>
+                        <input type="file" id="frontImageInput" name="frontImage" accept="image/*" class="drop-zone-input" hidden>
+                        <img id="frontImagePreview" class="drop-zone-preview" src="" alt="" hidden>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Retro</label>
+                    <div id="backDropZone" class="drop-zone">
+                        <div class="drop-zone-prompt">
+                            <i class="drop-zone-icon">📸</i>
+                            <p>Trascina qui l'immagine del retro o clicca per selezionare</p>
+                        </div>
+                        <input type="file" id="backImageInput" name="backImage" accept="image/*" class="drop-zone-input" hidden>
+                        <img id="backImagePreview" class="drop-zone-preview" src="" alt="" hidden>
                     </div>
                 </div>
                 
