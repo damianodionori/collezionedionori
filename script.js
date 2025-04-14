@@ -3,6 +3,9 @@ const supabaseUrl = 'https://saofewzchoidfzozcuhd.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhb2Zld3pjaG9pZGZ6b3pjdWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2NDk3MTMsImV4cCI6MjA2MDIyNTcxM30.y5nu8tXZa2GojVWjye9RLP4633v2dFPJ5IID8h8PRUc'
 const supabase = window.createClient(supabaseUrl, supabaseKey)
 
+// Verifica che il client Supabase sia stato inizializzato correttamente
+console.log('Supabase client inizializzato:', supabase);
+
 // Gestione dello stato dell'applicazione
 const appState = {
     isAuthenticated: false,
@@ -647,14 +650,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup form di login
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Form di login inviato');
+        
         const email = e.target.email.value;
         const password = e.target.password.value;
         
+        console.log('Tentativo di login con email:', email);
+        
         try {
             const success = await login(email, password);
+            console.log('Risultato login:', success);
+            
             if (success) {
+                console.log('Login riuscito, reset del form');
                 e.target.reset();
             } else {
+                console.error('Login fallito');
                 alert('Credenziali non valide');
             }
         } catch (error) {
