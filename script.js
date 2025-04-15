@@ -333,10 +333,35 @@ async function deleteItem(id) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Verifica se l'utente è autorizzato
-    const userEmail = user.email;
-    if (!(userEmail in authorizedEmails)) return;
+    // Trova l'item da eliminare
+    const item = appState.collection.find(item => item.id === id);
+    if (!item) return;
 
+    // Elimina le immagini dal bucket se esistono
+    const imagesToDelete = [];
+    if (item.front_image) {
+        // Ricava il percorso relativo dal link pubblico
+        const frontPath = item.front_image.split('/object/public/collection-images/')[1];
+        if (frontPath) imagesToDelete.push(frontPath);
+    }
+    if (item.back_image) {
+        const backPath = item.back_image.split('/object/public/collection-images/')[1];
+        if (backPath) imagesToDelete.push(backPath);
+    }
+    if (imagesToDelete.length > 0) {
+        try {
+            const { data, error } = await supabase.storage.from('collection-images').remove(imagesToDelete);
+            if (error) {
+                console.error('Errore durante la cancellazione delle immagini dal bucket:', error);
+            } else {
+                console.log('Immagini eliminate dal bucket:', imagesToDelete);
+            }
+        } catch (err) {
+            console.error('Eccezione durante la cancellazione delle immagini dal bucket:', err);
+        }
+    }
+
+    // Elimina il record dal database
     const { error } = await supabase
         .from('collection')
         .delete()
@@ -646,12 +671,41 @@ function showEditItemForm(id) {
     document.getElementById('type').value = item.type;
     document.getElementById('country').value = item.country;
     document.getElementById('year').value = item.year;
-    document.getElementById('era').value = item.era;
     document.getElementById('condition').value = item.condition;
     document.getElementById('description').value = item.description;
-    document.getElementById('frontImageUrl').value = item.front_image || '';
-    document.getElementById('backImageUrl').value = item.back_image || '';
-    
+
+    // Reset file input e anteprima immagini
+    const frontInput = document.getElementById('frontImageInput');
+    const backInput = document.getElementById('backImageInput');
+    const frontPreview = document.getElementById('frontImagePreview');
+    const backPreview = document.getElementById('backImagePreview');
+    const frontDropZone = document.getElementById('frontDropZone');
+    const backDropZone = document.getElementById('backDropZone');
+
+    // Reset file input
+    frontInput.value = '';
+    backInput.value = '';
+
+    // Mostra anteprima immagini già caricate
+    if (item.front_image) {
+        frontPreview.src = item.front_image;
+        frontPreview.hidden = false;
+        frontDropZone.classList.add('has-image');
+    } else {
+        frontPreview.src = '';
+        frontPreview.hidden = true;
+        frontDropZone.classList.remove('has-image');
+    }
+    if (item.back_image) {
+        backPreview.src = item.back_image;
+        backPreview.hidden = false;
+        backDropZone.classList.add('has-image');
+    } else {
+        backPreview.src = '';
+        backPreview.hidden = true;
+        backDropZone.classList.remove('has-image');
+    }
+
     showModal();
 }
 
@@ -698,6 +752,82 @@ function setupPasswordToggle() {
         toggleIcon.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
     });
 }
+
+// Funzione ricorsiva per ottenere tutti i file in tutte le sottocartelle
+async function listAllFiles(path = '') {
+    let allFiles = [];
+    const { data: items, error } = await supabase.storage.from('collection-images').list(path, { limit: 1000 });
+    if (error) {
+        console.error('Errore nel recupero dei file dal bucket:', error);
+        return [];
+    }
+    for (const item of items) {
+        if (item.id) continue; // skip folders with id (Supabase bug)
+        if (item.name && item.metadata && item.metadata.size !== undefined) {
+            // È un file
+            allFiles.push(path ? `${path}/${item.name}` : item.name);
+        } else if (item.name) {
+            // È una cartella, ricorsione
+            const subFiles = await listAllFiles(path ? `${path}/${item.name}` : item.name);
+            allFiles = allFiles.concat(subFiles);
+        }
+    }
+    return allFiles;
+}
+
+// Funzione ADMIN: elimina tutte le immagini orfane dal bucket (anche ricorsivo)
+async function cleanOrphanImages() {
+    // 1. Ottieni tutti i file dal bucket (ricorsivo)
+    const allFiles = await listAllFiles();
+
+    // 2. Ottieni tutti i record dal database
+    const { data: allItems, error: dbError } = await supabase
+        .from('collection')
+        .select('front_image, back_image');
+
+    if (dbError) {
+        console.error('Errore nel recupero dei record dal database:', dbError);
+        return;
+    }
+
+    // 3. Crea una lista di tutti i percorsi usati nel database
+    const usedPaths = new Set();
+    allItems.forEach(item => {
+        if (item.front_image) {
+            const frontPath = item.front_image.split('/object/public/collection-images/')[1];
+            if (frontPath) usedPaths.add(frontPath);
+        }
+        if (item.back_image) {
+            const backPath = item.back_image.split('/object/public/collection-images/')[1];
+            if (backPath) usedPaths.add(backPath);
+        }
+    });
+
+    // 4. Trova i file orfani
+    console.log('Tutti i file trovati nel bucket:', allFiles);
+    console.log('Percorsi usati nel database:', Array.from(usedPaths));
+    const orphanFiles = allFiles.filter(filePath => !usedPaths.has(filePath));
+
+    if (orphanFiles.length === 0) {
+        console.log('Nessun file orfano trovato!');
+        return;
+    }
+
+    // 5. Elimina i file orfani
+    const { data: removed, error: removeError } = await supabase
+        .storage
+        .from('collection-images')
+        .remove(orphanFiles);
+
+    if (removeError) {
+        console.error('Errore durante la cancellazione dei file orfani:', removeError);
+    } else {
+        console.log('File orfani eliminati:', orphanFiles);
+    }
+}
+
+// Espone la funzione admin di pulizia immagini orfane nel contesto globale
+window.cleanOrphanImages = cleanOrphanImages;
 
 // Inizializzazione
 document.addEventListener('DOMContentLoaded', () => {
@@ -759,7 +889,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup form elementi
     document.getElementById('itemForm').addEventListener('submit', (e) => {
         e.preventDefault();
-        
+
+        // Recupera i valori attuali delle immagini già esistenti (solo in modifica)
+        let currentFrontImage = null;
+        let currentBackImage = null;
+        const itemId = e.target.itemId.value;
+        if (itemId) {
+            const currentItem = appState.collection.find(item => item.id == itemId);
+            if (currentItem) {
+                currentFrontImage = currentItem.front_image || null;
+                currentBackImage = currentItem.back_image || null;
+            }
+        }
+
         const formData = {
             name: e.target.name.value,
             type: e.target.type.value,
@@ -767,18 +909,16 @@ document.addEventListener('DOMContentLoaded', () => {
             year: e.target.year.value ? parseInt(e.target.year.value) : null,
             condition: e.target.condition.value || null,
             description: e.target.description.value || null,
-            frontImage: imageHandler.getFrontFile() || null,
-            backImage: imageHandler.getBackFile() || null
+            frontImage: imageHandler.getFrontFile() || currentFrontImage,
+            backImage: imageHandler.getBackFile() || currentBackImage
         };
-        
-        const itemId = e.target.itemId.value;
-        
+
         if (itemId) {
             updateItem(parseInt(itemId), formData);
         } else {
             addItem(formData);
         }
-        
+
         closeModal();
         imageHandler.reset();
     });
