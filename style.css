@@ -146,27 +146,27 @@ main {
     display: flex;
     gap: 1rem;
     margin-bottom: 1rem;
+    padding: 1rem;
 }
 
 .collection-image {
     flex: 1;
-    height: 200px;
-    background-color: var(--secondary-color);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
     position: relative;
     border-radius: 8px;
+    overflow: hidden;
+    background-color: var(--secondary-color);
+    aspect-ratio: 3/2;
+    max-height: 200px;
 }
 
 .collection-image img {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    object-position: center;
-    background-color: var(--secondary-color);
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 .image-label {
@@ -179,6 +179,7 @@ main {
     text-align: center;
     padding: 4px;
     font-size: 0.8rem;
+    z-index: 1;
 }
 
 .collection-info {

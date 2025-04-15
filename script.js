@@ -180,10 +180,75 @@ async function loadCollection() {
     updateStats();
 }
 
+// Funzione per caricare un'immagine su Supabase Storage
+async function uploadImage(file, userId) {
+    if (!file) {
+        console.log('No file provided for upload');
+        return null;
+    }
+    
+    console.log('Starting upload process:', {
+        fileName: file.name,
+        userId: userId,
+        fileSize: file.size,
+        fileType: file.type,
+        file: file
+    });
+    
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+    const filePath = `${userId}/${fileName}`;
+    
+    console.log('Upload path:', filePath);
+    
+    try {
+        console.log('Attempting to upload file to Supabase storage...');
+        const { data, error } = await supabase.storage
+            .from('collection-images')
+            .upload(filePath, file);
+            
+        if (error) {
+            console.error('Error uploading image:', error);
+            console.error('Error details:', {
+                message: error.message,
+                statusCode: error.statusCode,
+                name: error.name,
+                details: error.details
+            });
+            return null;
+        }
+        
+        console.log('Upload successful:', data);
+        
+        console.log('Generating public URL...');
+        const { data: { publicUrl } } = supabase.storage
+            .from('collection-images')
+            .getPublicUrl(filePath);
+        
+        console.log('Generated public URL:', publicUrl);
+            
+        return publicUrl;
+    } catch (error) {
+        console.error('Exception during upload:', error);
+        console.error('Stack trace:', error.stack);
+        return null;
+    }
+}
+
 // Funzione per aggiungere un elemento
 async function addItem(item) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    console.log('Adding item with data:', item);
+    console.log('User ID:', user.id);
+
+    // Carica le immagini su Storage e ottieni gli URL pubblici
+    const frontImageUrl = await uploadImage(item.frontImage, user.id);
+    console.log('Front image URL:', frontImageUrl);
+    
+    const backImageUrl = await uploadImage(item.backImage, user.id);
+    console.log('Back image URL:', backImageUrl);
 
     const { data, error } = await supabase
         .from('collection')
@@ -193,8 +258,8 @@ async function addItem(item) {
                 added_by: appState.currentUser.displayName,
                 name: item.name,
                 description: item.description,
-                front_image: item.frontImage,
-                back_image: item.backImage,
+                front_image: frontImageUrl,
+                back_image: backImageUrl,
                 type: item.type,
                 country: item.country,
                 year: item.year,
@@ -210,6 +275,7 @@ async function addItem(item) {
         return;
     }
 
+    console.log('Item added successfully:', data);
     appState.collection.push(data[0]);
     renderCollection();
     updateStats();
@@ -220,15 +286,25 @@ async function updateItem(id, updatedItem) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Carica le nuove immagini su Storage se presenti
+    const frontImageUrl = updatedItem.frontImage instanceof File 
+        ? await uploadImage(updatedItem.frontImage, user.id)
+        : updatedItem.frontImage;
+    
+    const backImageUrl = updatedItem.backImage instanceof File
+        ? await uploadImage(updatedItem.backImage, user.id)
+        : updatedItem.backImage;
+
     const { error } = await supabase
         .from('collection')
         .update({
             name: updatedItem.name,
             description: updatedItem.description,
-            front_image: updatedItem.frontImage,
-            back_image: updatedItem.backImage,
-            price: updatedItem.price,
-            purchase_date: updatedItem.purchaseDate,
+            front_image: frontImageUrl,
+            back_image: backImageUrl,
+            type: updatedItem.type,
+            country: updatedItem.country,
+            year: updatedItem.year,
             condition: updatedItem.condition,
             notes: updatedItem.notes
         })
@@ -242,7 +318,12 @@ async function updateItem(id, updatedItem) {
 
     const index = appState.collection.findIndex(item => item.id === id);
     if (index !== -1) {
-        appState.collection[index] = { ...appState.collection[index], ...updatedItem };
+        appState.collection[index] = { 
+            ...appState.collection[index], 
+            ...updatedItem,
+            front_image: frontImageUrl,
+            back_image: backImageUrl
+        };
         renderCollection();
     }
 }
@@ -442,6 +523,7 @@ function renderCollection(items = appState.collection) {
 
 // Creazione elemento della collezione
 function createItemElement(item) {
+    console.log('Creating item element with data:', item);
     const div = document.createElement('div');
     div.className = 'collection-item';
     div.innerHTML = `
