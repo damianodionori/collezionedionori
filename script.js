@@ -12,7 +12,7 @@ const appState = {
     currentUser: null,
     collection: [],
     currentPage: 1,
-    itemsPerPage: 6,
+    itemsPerPage: 9,
     filters: {
         search: '',
         type: '',
@@ -175,7 +175,14 @@ async function loadCollection() {
         return;
     }
 
-    appState.collection = data || [];
+    // Converti tutti gli URL delle immagini in URL assoluti
+    appState.collection = (data || []).map(item => ({
+        ...item,
+        front_image: item.front_image ? new URL(item.front_image, supabaseUrl).toString() : null,
+        back_image: item.back_image ? new URL(item.back_image, supabaseUrl).toString() : null
+    }));
+
+    console.log('Collection loaded with converted URLs:', appState.collection);
     renderCollection();
     updateStats();
 }
@@ -213,21 +220,36 @@ async function uploadImage(file, userId) {
                 message: error.message,
                 statusCode: error.statusCode,
                 name: error.name,
-                details: error.details
+                details: error.details,
+                hint: error.hint
             });
             return null;
         }
         
-        console.log('Upload successful:', data);
+        console.log('Upload successful, storage response:', data);
         
         console.log('Generating public URL...');
         const { data: { publicUrl } } = supabase.storage
             .from('collection-images')
             .getPublicUrl(filePath);
         
-        console.log('Generated public URL:', publicUrl);
+        // Assicuriamoci che l'URL sia assoluto e funzionante
+        const absoluteUrl = new URL(publicUrl, supabaseUrl).toString();
+        console.log('Generated absolute URL:', absoluteUrl);
+        
+        // Verifica che l'URL sia accessibile
+        try {
+            const response = await fetch(absoluteUrl, { method: 'HEAD' });
+            console.log('URL accessibility check:', {
+                status: response.status,
+                ok: response.ok,
+                url: absoluteUrl
+            });
+        } catch (e) {
+            console.error('Error checking URL accessibility:', e);
+        }
             
-        return publicUrl;
+        return absoluteUrl;
     } catch (error) {
         console.error('Exception during upload:', error);
         console.error('Stack trace:', error.stack);
@@ -250,6 +272,10 @@ async function addItem(item) {
     const backImageUrl = await uploadImage(item.backImage, user.id);
     console.log('Back image URL:', backImageUrl);
 
+    // Assicuriamoci che gli URL siano assoluti prima di salvarli
+    const absoluteFrontImageUrl = frontImageUrl ? new URL(frontImageUrl, supabaseUrl).toString() : null;
+    const absoluteBackImageUrl = backImageUrl ? new URL(backImageUrl, supabaseUrl).toString() : null;
+
     const { data, error } = await supabase
         .from('collection')
         .insert([
@@ -258,8 +284,8 @@ async function addItem(item) {
                 added_by: appState.currentUser.displayName,
                 name: item.name,
                 description: item.description,
-                front_image: frontImageUrl,
-                back_image: backImageUrl,
+                front_image: absoluteFrontImageUrl,
+                back_image: absoluteBackImageUrl,
                 type: item.type,
                 country: item.country,
                 year: item.year,
@@ -531,8 +557,10 @@ function updatePagination(items) {
 
 // Rendering della collezione
 function renderCollection(items = appState.collection) {
-    const start = (appState.currentPage - 1) * appState.itemsPerPage;
-    const end = start + appState.itemsPerPage;
+    // Forza 9 elementi per pagina
+    const itemsPerPage = 9;
+    const start = (appState.currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
     const paginatedItems = items.slice(start, end);
     
     const grid = document.querySelector('.collection-grid');
@@ -543,29 +571,83 @@ function renderCollection(items = appState.collection) {
         grid.appendChild(itemElement);
     });
     
-    updatePagination(items);
+    // Aggiorna la paginazione con il nuovo numero di elementi per pagina
+    const totalPages = Math.ceil(items.length / itemsPerPage);
+    const paginationElement = document.querySelector('.pagination');
+    paginationElement.innerHTML = '';
+    
+    if (totalPages > 1) {
+        // Aggiungi pulsante precedente se non siamo alla prima pagina
+        if (appState.currentPage > 1) {
+            const prevButton = document.createElement('button');
+            prevButton.textContent = '←';
+            prevButton.onclick = () => {
+                appState.currentPage--;
+                renderCollection(items);
+            };
+            paginationElement.appendChild(prevButton);
+        }
+        
+        // Aggiungi numeri di pagina
+        for (let i = 1; i <= totalPages; i++) {
+            const button = document.createElement('button');
+            button.textContent = i;
+            button.classList.toggle('active', i === appState.currentPage);
+            button.onclick = () => {
+                appState.currentPage = i;
+                renderCollection(items);
+            };
+            paginationElement.appendChild(button);
+        }
+        
+        // Aggiungi pulsante successivo se non siamo all'ultima pagina
+        if (appState.currentPage < totalPages) {
+            const nextButton = document.createElement('button');
+            nextButton.textContent = '→';
+            nextButton.onclick = () => {
+                appState.currentPage++;
+                renderCollection(items);
+            };
+            paginationElement.appendChild(nextButton);
+        }
+    }
 }
 
 // Creazione elemento della collezione
 function createItemElement(item) {
     console.log('Creating item element with data:', item);
+    
+    // Assicuriamoci che gli URL delle immagini siano assoluti
+    const getAbsoluteUrl = (url) => {
+        if (!url) return null;
+        try {
+            return new URL(url, supabaseUrl).toString();
+        } catch (e) {
+            console.error('Error creating absolute URL:', e);
+            return url;
+        }
+    };
+
+    const frontImageUrl = getAbsoluteUrl(item.front_image);
+    const backImageUrl = getAbsoluteUrl(item.back_image);
+
     const div = document.createElement('div');
     div.className = 'collection-item';
     div.innerHTML = `
         <div class="collection-images">
-            ${item.front_image ? `
+            ${frontImageUrl ? `
                 <div class="collection-image">
-                    <img src="${item.front_image}" alt="${item.name} - Fronte">
+                    <img src="${frontImageUrl}" alt="${item.name} - Fronte">
                     <span class="image-label">Fronte</span>
                 </div>
             ` : ''}
-            ${item.back_image ? `
+            ${backImageUrl ? `
                 <div class="collection-image">
-                    <img src="${item.back_image}" alt="${item.name} - Retro">
+                    <img src="${backImageUrl}" alt="${item.name} - Retro">
                     <span class="image-label">Retro</span>
                 </div>
             ` : ''}
-            ${!item.front_image && !item.back_image ? `
+            ${!frontImageUrl && !backImageUrl ? `
                 <div class="collection-image no-image">
                     <span>Nessuna immagine disponibile</span>
                 </div>
@@ -736,103 +818,97 @@ function setupMobileMenu() {
     });
 }
 
-// Gestione della visibilità della password
-function setupPasswordToggle() {
-    const passwordField = document.querySelector('input[type="password"]');
-    const toggleButton = document.querySelector('.password-toggle');
-    const toggleIcon = document.querySelector('.password-toggle-icon');
+// Tema Dark/Light
+function initTheme() {
+    const themeToggle = document.createElement('button');
+    themeToggle.className = 'theme-toggle';
+    themeToggle.innerHTML = '🌓';
+    document.body.appendChild(themeToggle);
 
-    toggleButton.addEventListener('click', () => {
-        // Cambia il tipo dell'input
-        const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordField.setAttribute('type', type);
+    // Imposta il tema dark come default
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+    });
+}
+
+// Lightbox
+function initLightbox() {
+    const lightbox = document.createElement('div');
+    lightbox.className = 'lightbox';
+    lightbox.innerHTML = `
+        <div class="lightbox-content">
+            <img class="lightbox-image" src="" alt="">
+            <div class="lightbox-caption"></div>
+            <button class="lightbox-close">×</button>
+            <div class="lightbox-nav">
+                <button class="lightbox-prev">❮</button>
+                <button class="lightbox-next">❯</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(lightbox);
+
+    let currentImageIndex = 0;
+    let images = [];
+
+    function showImage(index) {
+        const image = images[index];
+        const lightboxImg = lightbox.querySelector('.lightbox-image');
+        const caption = lightbox.querySelector('.lightbox-caption');
         
-        // Aggiorna l'icona e lo stato del pulsante
-        toggleButton.classList.toggle('active');
-        toggleIcon.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
-    });
-}
-
-// Funzione ricorsiva per ottenere tutti i file in tutte le sottocartelle
-async function listAllFiles(path = '') {
-    let allFiles = [];
-    const { data: items, error } = await supabase.storage.from('collection-images').list(path, { limit: 1000 });
-    if (error) {
-        console.error('Errore nel recupero dei file dal bucket:', error);
-        return [];
-    }
-    for (const item of items) {
-        if (item.id) continue; // skip folders with id (Supabase bug)
-        if (item.name && item.metadata && item.metadata.size !== undefined) {
-            // È un file
-            allFiles.push(path ? `${path}/${item.name}` : item.name);
-        } else if (item.name) {
-            // È una cartella, ricorsione
-            const subFiles = await listAllFiles(path ? `${path}/${item.name}` : item.name);
-            allFiles = allFiles.concat(subFiles);
-        }
-    }
-    return allFiles;
-}
-
-// Funzione ADMIN: elimina tutte le immagini orfane dal bucket (anche ricorsivo)
-async function cleanOrphanImages() {
-    // 1. Ottieni tutti i file dal bucket (ricorsivo)
-    const allFiles = await listAllFiles();
-
-    // 2. Ottieni tutti i record dal database
-    const { data: allItems, error: dbError } = await supabase
-        .from('collection')
-        .select('front_image, back_image');
-
-    if (dbError) {
-        console.error('Errore nel recupero dei record dal database:', dbError);
-        return;
+        lightboxImg.src = image.src;
+        caption.textContent = image.alt || '';
+        currentImageIndex = index;
     }
 
-    // 3. Crea una lista di tutti i percorsi usati nel database
-    const usedPaths = new Set();
-    allItems.forEach(item => {
-        if (item.front_image) {
-            const frontPath = item.front_image.split('/object/public/collection-images/')[1];
-            if (frontPath) usedPaths.add(frontPath);
-        }
-        if (item.back_image) {
-            const backPath = item.back_image.split('/object/public/collection-images/')[1];
-            if (backPath) usedPaths.add(backPath);
+    document.addEventListener('click', (e) => {
+        if (e.target.matches('.collection-item img')) {
+            images = Array.from(document.querySelectorAll('.collection-item img'));
+            currentImageIndex = images.indexOf(e.target);
+            showImage(currentImageIndex);
+            lightbox.classList.add('active');
         }
     });
 
-    // 4. Trova i file orfani
-    console.log('Tutti i file trovati nel bucket:', allFiles);
-    console.log('Percorsi usati nel database:', Array.from(usedPaths));
-    const orphanFiles = allFiles.filter(filePath => !usedPaths.has(filePath));
+    lightbox.querySelector('.lightbox-close').addEventListener('click', () => {
+        lightbox.classList.remove('active');
+    });
 
-    if (orphanFiles.length === 0) {
-        console.log('Nessun file orfano trovato!');
-        return;
-    }
+    lightbox.querySelector('.lightbox-prev').addEventListener('click', () => {
+        currentImageIndex = (currentImageIndex - 1 + images.length) % images.length;
+        showImage(currentImageIndex);
+    });
 
-    // 5. Elimina i file orfani
-    const { data: removed, error: removeError } = await supabase
-        .storage
-        .from('collection-images')
-        .remove(orphanFiles);
+    lightbox.querySelector('.lightbox-next').addEventListener('click', () => {
+        currentImageIndex = (currentImageIndex + 1) % images.length;
+        showImage(currentImageIndex);
+    });
 
-    if (removeError) {
-        console.error('Errore durante la cancellazione dei file orfani:', removeError);
-    } else {
-        console.log('File orfani eliminati:', orphanFiles);
-    }
+    // Chiudi con ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+            lightbox.classList.remove('active');
+        }
+    });
 }
 
-// Espone la funzione admin di pulizia immagini orfane nel contesto globale
-window.cleanOrphanImages = cleanOrphanImages;
-
-// Inizializzazione
+// Inizializza le nuove funzionalità
 document.addEventListener('DOMContentLoaded', () => {
-    // Setup della visibilità della password
-    setupPasswordToggle();
+    // Imposta immediatamente il tema dark come default
+    document.documentElement.setAttribute('data-theme', 'dark');
+    
+    // Inizializza il toggle del tema
+    initTheme();
+    
+    // Imposta il numero di elementi per pagina
+    appState.itemsPerPage = 9;
+    console.log('Set itemsPerPage to:', appState.itemsPerPage);
     
     // Setup del menu mobile
     setupMobileMenu();
@@ -858,6 +934,88 @@ document.addEventListener('DOMContentLoaded', () => {
             applyFilters();
         });
     });
+
+    // Gestione effetto navbar allo scroll
+    const navbar = document.querySelector('.navbar');
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 50) {
+            navbar.classList.add('scrolled');
+        } else {
+            navbar.classList.remove('scrolled');
+        }
+    });
+
+    // Gestione caricamento immagini
+    document.addEventListener('load', function(e) {
+        if (e.target.tagName === 'IMG') {
+            e.target.classList.add('loaded');
+        }
+    }, true);
+
+    // Animazione smooth per i link della navbar
+    document.querySelectorAll('.nav-links a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            const href = link.getAttribute('href');
+            if (href.startsWith('#')) {
+                e.preventDefault();
+                const target = document.querySelector(href);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        });
+    });
+
+    // Effetto ripple sui bottoni
+    document.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', function(e) {
+            const rect = button.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const ripple = document.createElement('span');
+            ripple.style.cssText = `
+                position: absolute;
+                background: rgba(255, 255, 255, 0.7);
+                border-radius: 50%;
+                pointer-events: none;
+                width: 100px;
+                height: 100px;
+                left: ${x - 50}px;
+                top: ${y - 50}px;
+                transform: scale(0);
+                animation: ripple 0.6s linear;
+            `;
+            
+            button.appendChild(ripple);
+            
+            setTimeout(() => ripple.remove(), 600);
+        });
+    });
+
+    // Aggiungi tutti gli stili CSS dinamici
+    const dynamicStyles = document.createElement('style');
+    dynamicStyles.textContent = `
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .collection-image.no-image {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            background-color: var(--secondary-color);
+            color: var(--dark-color);
+            font-style: italic;
+            text-align: center;
+            padding: 1rem;
+        }
+    `;
+    document.head.appendChild(dynamicStyles);
     
     // Setup form di login
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -923,20 +1081,6 @@ document.addEventListener('DOMContentLoaded', () => {
         imageHandler.reset();
     });
 
-    // Aggiornamento stili CSS inline per il caso "nessuna immagine"
-    const style = document.createElement('style');
-    style.textContent = `
-        .collection-image.no-image {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 200px;
-            background-color: var(--secondary-color);
-            color: var(--dark-color);
-            font-style: italic;
-            text-align: center;
-            padding: 1rem;
-        }
-    `;
-    document.head.appendChild(style);
+    initTheme();
+    initLightbox();
 });

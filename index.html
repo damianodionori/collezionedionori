@@ -33,24 +33,17 @@
                Ogni pezzo racchiude una storia, un'epoca e un patrimonio culturale unico. 
                La nostra collezione comprende pezzi provenienti da tutti i continenti e da diverse epoche storiche.</p>
         
-        <div class="auth-hidden">
-            <form id="loginForm" class="login-form auth-hidden">
+            <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label for="email">Email:</label>
                     <input type="email" id="email" name="email" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Password:</label>
-                    <div class="password-field">
-                        <input type="password" id="password" name="password" required>
-                        <button type="button" class="password-toggle">
-                            <span class="password-toggle-icon">👁️</span>
-                        </button>
-                    </div>
+                    <input type="password" id="password" name="password" required>
                 </div>
                 <button type="submit">Accedi</button>
             </form>
-        </div>
         
         <div id="userInfo" class="user-info" style="display: none;">
             Connesso come: <span id="userName"></span>
@@ -210,6 +203,6 @@
         const { createClient } = supabase;
         window.createClient = createClient;
     </script>
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>
