@@ -27,6 +27,9 @@
     --card-bg: #2C2320;
     --shadow-color: rgba(0, 0, 0, 0.3);
     --primary-color-rgb: 166, 127, 93;
+    --footer-text: #F7F4F1;
+    --footer-link: #D4C4B7;
+    --footer-link-hover: #ffffff;
 }
 
 /* Tema transition */
@@ -326,6 +329,7 @@ main {
     border-radius: 8px;
     margin-bottom: 2rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
 }
 
 .filter-controls {
@@ -333,15 +337,19 @@ main {
     flex-wrap: wrap;
     gap: 1rem;
     margin-top: 1rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .filter-control {
-    padding: 0.5rem 1rem;
+    padding: 0.8rem 1rem;
     border: 2px solid transparent;
     transition: all 0.3s ease;
     background: white;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 0.9rem;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .filter-control:focus {
@@ -353,12 +361,14 @@ main {
 .search-box {
     flex: 1;
     min-width: 250px;
-    padding: 0.5rem 1rem;
+    padding: 0.8rem 1rem;
     border: 2px solid transparent;
     transition: all 0.3s ease;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 0.9rem;
     background: white;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .search-box:focus {
@@ -425,7 +435,7 @@ button:hover::before {
 
 footer {
     background-color: var(--dark-color);
-    color: white;
+    color: var(--light-color);
     text-align: center;
     padding: 2rem;
     margin-top: 3rem;
@@ -470,15 +480,15 @@ footer {
 
 .copyright {
     margin-bottom: 1rem;
-    color: #ccc;
+    color: var(--light-color);
     font-size: 0.9rem;
 }
 
 .credits {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #444;
-    color: #ccc;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--light-color);
     font-size: 0.9rem;
 }
 
@@ -550,12 +560,22 @@ footer {
         height: 180px;
     }
 
-    .filter-controls {
-        flex-direction: column;
+    .filter-section {
+        padding: 1.5rem;
+        margin: 1rem;
+        width: calc(100% - 2rem);
     }
 
-    .filter-control, .search-box {
+    .filter-controls {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0;
+    }
+
+    .filter-control, 
+    .search-box {
         width: 100%;
+        margin: 0;
     }
 
     .collection-meta {
@@ -613,8 +633,29 @@ footer {
 
     /* Aggiustamenti per il form di login */
     .login-form {
-        max-width: calc(100% - 2rem);
+        flex-direction: column;
+        gap: 1rem;
+        padding: 2rem;
         margin: 1rem;
+        width: calc(100% - 2rem);
+        box-sizing: border-box;
+    }
+
+    #loginForm .form-group {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    #loginForm input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #loginForm button[type="submit"] {
+        width: 100%;
+        margin-top: 1rem;
+        height: 40px;
     }
 }
 
@@ -643,7 +684,7 @@ footer {
     }
 
     .login-form {
-        padding: 1rem;
+        padding: 1.5rem;
     }
 }
 
@@ -957,6 +998,32 @@ footer {
     .hamburger-menu.active .hamburger-line:nth-child(3) {
         transform: rotate(-45deg) translate(7px, -7px);
     }
+
+    #loginForm {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 2rem;
+        margin: 1rem;
+        width: calc(100% - 2rem);
+        box-sizing: border-box;
+    }
+
+    #loginForm .form-group {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    #loginForm input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #loginForm button[type="submit"] {
+        width: 100%;
+        margin-top: 1rem;
+        height: 40px;
+    }
 }
 
 .user-info {
@@ -1232,5 +1299,32 @@ footer {
 .hero button:hover {
     background: var(--accent-color);
     transform: translateY(-2px);
+}
+
+[data-theme="dark"] .footer-section h3 {
+    color: var(--footer-link);
+}
+
+[data-theme="dark"] .footer-section a {
+    color: var(--footer-text);
+}
+
+[data-theme="dark"] .footer-section a:hover {
+    color: var(--footer-link-hover);
+}
+
+[data-theme="dark"] .copyright,
+[data-theme="dark"] .credits {
+    color: var(--footer-text);
+}
+
+[data-theme="dark"] footer {
+    background-color: #1a1610;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .copyright,
+[data-theme="dark"] .credits {
+    color: rgba(255, 255, 255, 0.9);
 }
 
