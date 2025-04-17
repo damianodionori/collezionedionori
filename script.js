@@ -71,12 +71,14 @@ async function logout() {
 
 async function checkAuthStatus() {
     try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (session) {
             appState.isAuthenticated = true;
             appState.currentUser = {
-                ...user,
-                displayName: authorizedEmails[user.email] || user.email
+                ...session.user,
+                displayName: authorizedEmails[session.user.email] || session.user.email
             };
             updateUIForAuthenticatedUser();
             await loadCollection();
@@ -84,7 +86,7 @@ async function checkAuthStatus() {
             updateUIForUnauthenticatedUser();
         }
     } catch (error) {
-        console.error('Errore nel controllo dello stato di autenticazione:', error.message)
+        console.error('Errore nel controllo dello stato di autenticazione:', error.message);
         updateUIForUnauthenticatedUser();
     }
 }
@@ -522,20 +524,97 @@ async function importCollection(file) {
     reader.readAsText(file);
 }
 
-// Gestione dei filtri
-function applyFilters() {
-    const filteredItems = appState.collection.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(appState.filters.search.toLowerCase()) ||
-                            item.description.toLowerCase().includes(appState.filters.search.toLowerCase());
-        const matchesType = !appState.filters.type || item.type === appState.filters.type;
-        const matchesCountry = !appState.filters.country || item.country === appState.filters.country;
-        const matchesEra = !appState.filters.era || item.era === appState.filters.era;
-        
-        return matchesSearch && matchesType && matchesCountry && matchesEra;
-    });
-    
-    renderCollection(filteredItems);
+// Funzione di debounce per ritardare l'esecuzione
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
+
+// Gestione dei filtri
+async function applyFilters() {
+    try {
+        console.log('Starting filter application...');
+        
+        if (!appState.isAuthenticated) {
+            console.log('User not authenticated');
+            return;
+        }
+
+        console.log('Building query with filters:', appState.filters);
+        let query = supabase
+            .from('collection')
+            .select('*');
+
+        // Costruisci un array di condizioni OR per la ricerca
+        let searchConditions = [];
+        if (appState.filters.search) {
+            const searchTerm = appState.filters.search.toLowerCase();
+            console.log('Applying search filter:', searchTerm);
+            searchConditions = [
+                `name.ilike.%${searchTerm}%`,
+                `description.ilike.%${searchTerm}%`,
+                `country.ilike.%${searchTerm}%`
+            ];
+            query = query.or(searchConditions.join(','));
+        }
+
+        // Applica il filtro per tipo
+        if (appState.filters.type) {
+            console.log('Applying type filter:', appState.filters.type);
+            query = query.eq('type', appState.filters.type);
+        }
+
+        // Applica il filtro per paese
+        if (appState.filters.country) {
+            console.log('Applying country filter:', appState.filters.country);
+            // Cerca il paese sia in maiuscolo che in minuscolo
+            query = query.or(`country.ilike.%${appState.filters.country}%`);
+        }
+
+        // Applica il filtro per epoca
+        if (appState.filters.era) {
+            console.log('Applying era filter:', appState.filters.era);
+            query = query.eq('era', appState.filters.era);
+        }
+
+        console.log('Executing query...');
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error applying filters:', error);
+            return;
+        }
+
+        console.log('Query results:', data);
+
+        // Converti gli URL delle immagini
+        appState.collection = (data || []).map(item => ({
+            ...item,
+            front_image: item.front_image ? new URL(item.front_image, supabaseUrl).toString() : null,
+            back_image: item.back_image ? new URL(item.back_image, supabaseUrl).toString() : null
+        }));
+
+        // Resetta la pagina corrente
+        appState.currentPage = 1;
+        
+        console.log('Rendering filtered collection...');
+        // Renderizza la collezione filtrata
+        renderCollection();
+        updateStats();
+    } catch (error) {
+        console.error('Error in applyFilters:', error);
+    }
+}
+
+// Versione con debounce della funzione applyFilters
+const debouncedApplyFilters = debounce(applyFilters, 300);
 
 // Gestione della paginazione
 function updatePagination(items) {
@@ -696,7 +775,9 @@ function saveCollection() {
 
 // Aggiornamento UI in base allo stato di autenticazione
 function updateUIForAuthenticatedUser() {
-    document.querySelector('.auth-hidden').style.display = 'none';
+    // Nascondi il form di login
+    document.getElementById('loginForm').style.display = 'none';
+    // Mostra le informazioni dell'utente
     document.getElementById('userInfo').style.display = 'flex';
     document.getElementById('userName').textContent = appState.currentUser.displayName;
     
@@ -713,7 +794,9 @@ function updateUIForAuthenticatedUser() {
 }
 
 function updateUIForUnauthenticatedUser() {
-    document.querySelector('.auth-hidden').style.display = 'block';
+    // Mostra il form di login
+    document.getElementById('loginForm').style.display = 'flex';
+    // Nascondi le informazioni dell'utente
     document.getElementById('userInfo').style.display = 'none';
     document.getElementById('userName').textContent = '';
     
@@ -722,9 +805,6 @@ function updateUIForUnauthenticatedUser() {
     if (addButton) {
         addButton.remove();
     }
-
-    // Ricarica la collezione
-    loadCollection();
 }
 
 // Gestione del modal
@@ -925,14 +1005,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup eventi per i filtri
     document.querySelector('.search-box').addEventListener('input', (e) => {
         appState.filters.search = e.target.value;
-        applyFilters();
+        debouncedApplyFilters();
     });
     
     document.querySelectorAll('.filter-control').forEach(select => {
         select.addEventListener('change', (e) => {
             appState.filters[e.target.name] = e.target.value;
-            applyFilters();
+            applyFilters(); // Applica immediatamente per i select
         });
+    });
+
+    // Aggiungo l'event listener per il pulsante dei filtri
+    document.getElementById('filterButton').addEventListener('click', () => {
+        console.log('Applying filters with state:', appState.filters);
+        applyFilters();
     });
 
     // Gestione effetto navbar allo scroll

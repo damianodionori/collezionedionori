@@ -1,3 +1,6 @@
+/* Import dei font da Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
 :root {
     /* Light theme (default) */
     --primary-color: #8B7355;
@@ -13,6 +16,8 @@
     --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     --hover-transform: translateY(-5px);
     --primary-color-rgb: 139, 115, 85;
+    --font-heading: 'Playfair Display', serif;
+    --font-body: 'Inter', sans-serif;
 }
 
 /* Dark theme */
@@ -41,6 +46,7 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     padding-top: 60px; /* Altezza della navbar */
+    font-family: var(--font-body);
 }
 
 header {
@@ -155,6 +161,7 @@ main {
     font-weight: 700;
     letter-spacing: 0.5px;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    font-family: var(--font-heading);
 }
 
 .hero p {
@@ -164,6 +171,7 @@ main {
     color: #ffffff;
     font-size: 1.1rem;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    font-family: var(--font-body);
 }
 
 .stats {
@@ -198,6 +206,7 @@ main {
     font-size: 2.8rem;
     font-weight: bold;
     margin-bottom: 0.5rem;
+    font-family: var(--font-heading);
 }
 
 .collection-grid {
@@ -305,12 +314,16 @@ main {
 .collection-info h3 {
     margin-bottom: 0.5rem;
     color: var(--primary-color);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .collection-info p {
     color: #666;
     font-size: 0.9rem;
     margin-bottom: 0.5rem;
+    font-family: var(--font-body);
 }
 
 .collection-meta {
@@ -458,6 +471,9 @@ footer {
 .footer-section h3 {
     margin-bottom: 1rem;
     color: var(--secondary-color);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .footer-section ul {
@@ -931,6 +947,9 @@ footer {
     font-size: 1.5rem;
     font-weight: bold;
     margin-left: 1rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: 1px;
 }
 
 .nav-links {
@@ -1326,5 +1345,17 @@ footer {
 [data-theme="dark"] .copyright,
 [data-theme="dark"] .credits {
     color: rgba(255, 255, 255, 0.9);
+}
+
+/* Miglioramento della leggibilità */
+p, span, button, input, select, textarea {
+    font-family: var(--font-body);
+    line-height: 1.6;
+}
+
+/* Miglioramento della leggibilità per il testo piccolo */
+.small-text {
+    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
