@@ -12,12 +12,12 @@ const appState = {
     currentUser: null,
     collection: [],
     currentPage: 1,
-    itemsPerPage: 9,
+    itemsPerPage: 6,
     filters: {
         search: '',
         type: '',
         country: '',
-        era: ''
+        continente: ''
     }
 };
 
@@ -268,38 +268,47 @@ async function addItem(item) {
     console.log('User ID:', user.id);
 
     // Carica le immagini su Storage e ottieni gli URL pubblici
-    const frontImageUrl = await uploadImage(item.frontImage, user.id);
+    const frontImageUrl = item.frontImage ? await uploadImage(item.frontImage, user.id) : null;
     console.log('Front image URL:', frontImageUrl);
     
-    const backImageUrl = await uploadImage(item.backImage, user.id);
+    const backImageUrl = item.backImage ? await uploadImage(item.backImage, user.id) : null;
     console.log('Back image URL:', backImageUrl);
 
     // Assicuriamoci che gli URL siano assoluti prima di salvarli
     const absoluteFrontImageUrl = frontImageUrl ? new URL(frontImageUrl, supabaseUrl).toString() : null;
     const absoluteBackImageUrl = backImageUrl ? new URL(backImageUrl, supabaseUrl).toString() : null;
 
+    // Prepara i dati per l'inserimento
+    const itemData = {
+        user_id: user.id,
+        added_by: appState.currentUser.displayName,
+        name: item.name || null,
+        description: item.description || null,
+        front_image: absoluteFrontImageUrl,
+        back_image: absoluteBackImageUrl,
+        type: item.type || null,
+        country: item.country || null,
+        continent: item.continent || null,
+        year: item.year || null,
+        condition: item.condition || null,
+        notes: item.notes || null,
+        added_date: new Date().toISOString()
+    };
+
+    console.log('Prepared item data for insertion:', itemData);
+
     const { data, error } = await supabase
         .from('collection')
-        .insert([
-            {
-                user_id: user.id,
-                added_by: appState.currentUser.displayName,
-                name: item.name,
-                description: item.description,
-                front_image: absoluteFrontImageUrl,
-                back_image: absoluteBackImageUrl,
-                type: item.type,
-                country: item.country,
-                year: item.year,
-                condition: item.condition,
-                notes: item.notes,
-                added_date: new Date().toISOString()
-            }
-        ])
+        .insert([itemData])
         .select();
 
     if (error) {
         console.error('Error adding item:', error);
+        console.error('Error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+        });
         return;
     }
 
@@ -332,6 +341,7 @@ async function updateItem(id, updatedItem) {
             back_image: backImageUrl,
             type: updatedItem.type,
             country: updatedItem.country,
+            continent: updatedItem.continent,
             year: updatedItem.year,
             condition: updatedItem.condition,
             notes: updatedItem.notes
@@ -358,50 +368,206 @@ async function updateItem(id, updatedItem) {
 
 // Funzione per eliminare un elemento
 async function deleteItem(id) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    // Trova l'elemento da eliminare per mostrare i dettagli nel modal di conferma
+    const itemToDelete = appState.collection.find(item => item.id === id);
+    if (!itemToDelete) return;
 
-    // Trova l'item da eliminare
-    const item = appState.collection.find(item => item.id === id);
-    if (!item) return;
+    // Crea e mostra il modal di conferma
+    const confirmModal = document.createElement('div');
+    confirmModal.className = 'modal confirmation-modal';
+    confirmModal.style.display = 'block';  // Assicurati che il modal sia visibile
+    confirmModal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="confirmation-header">
+                <h2>Conferma eliminazione</h2>
+                <span class="modal-close" onclick="this.closest('.modal').remove()">&times;</span>
+            </div>
+            <div class="confirmation-body">
+                <p>Sei sicuro di voler eliminare questo elemento?</p>
+                <div class="item-preview">
+                    <strong>${itemToDelete.name}</strong>
+                    ${itemToDelete.country ? `<span>Paese: ${itemToDelete.country}</span>` : ''}
+                    ${itemToDelete.year ? `<span>Anno: ${itemToDelete.year}</span>` : ''}
+                </div>
+                <p class="warning-text">Questa azione non può essere annullata.</p>
+            </div>
+            <div class="confirmation-footer">
+                <button class="cancel-button" onclick="this.closest('.modal').remove()">Annulla</button>
+                <button class="delete-button">Elimina</button>
+            </div>
+        </div>
+    `;
 
-    // Elimina le immagini dal bucket se esistono
-    const imagesToDelete = [];
-    if (item.front_image) {
-        // Ricava il percorso relativo dal link pubblico
-        const frontPath = item.front_image.split('/object/public/collection-images/')[1];
-        if (frontPath) imagesToDelete.push(frontPath);
-    }
-    if (item.back_image) {
-        const backPath = item.back_image.split('/object/public/collection-images/')[1];
-        if (backPath) imagesToDelete.push(backPath);
-    }
-    if (imagesToDelete.length > 0) {
-        try {
-            const { data, error } = await supabase.storage.from('collection-images').remove(imagesToDelete);
-            if (error) {
-                console.error('Errore durante la cancellazione delle immagini dal bucket:', error);
-            } else {
-                console.log('Immagini eliminate dal bucket:', imagesToDelete);
-            }
-        } catch (err) {
-            console.error('Eccezione durante la cancellazione delle immagini dal bucket:', err);
+    // Aggiungi l'event listener per il pulsante Elimina
+    const deleteButton = confirmModal.querySelector('.delete-button');
+    deleteButton.addEventListener('click', async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Trova l'item da eliminare
+        const item = appState.collection.find(item => item.id === id);
+        if (!item) return;
+
+        // Elimina le immagini dal bucket se esistono
+        const imagesToDelete = [];
+        if (item.front_image) {
+            const frontPath = item.front_image.split('/object/public/collection-images/')[1];
+            if (frontPath) imagesToDelete.push(frontPath);
         }
-    }
+        if (item.back_image) {
+            const backPath = item.back_image.split('/object/public/collection-images/')[1];
+            if (backPath) imagesToDelete.push(backPath);
+        }
+        if (imagesToDelete.length > 0) {
+            try {
+                const { data, error } = await supabase.storage.from('collection-images').remove(imagesToDelete);
+                if (error) {
+                    console.error('Errore durante la cancellazione delle immagini dal bucket:', error);
+                } else {
+                    console.log('Immagini eliminate dal bucket:', imagesToDelete);
+                }
+            } catch (err) {
+                console.error('Eccezione durante la cancellazione delle immagini dal bucket:', err);
+            }
+        }
 
-    // Elimina il record dal database
-    const { error } = await supabase
-        .from('collection')
-        .delete()
-        .eq('id', id);
+        // Elimina il record dal database
+        const { error } = await supabase
+            .from('collection')
+            .delete()
+            .eq('id', id);
 
-    if (error) {
-        console.error('Error deleting item:', error);
-        return;
-    }
+        if (error) {
+            console.error('Error deleting item:', error);
+            return;
+        }
 
-    appState.collection = appState.collection.filter(item => item.id !== id);
-    renderCollection();
+        // Rimuovi il modal di conferma
+        confirmModal.remove();
+
+        // Aggiorna la collezione e l'interfaccia
+        appState.collection = appState.collection.filter(item => item.id !== id);
+        renderCollection();
+        updateStats();
+    });
+
+    // Aggiungi stili CSS inline per il nuovo modal
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+        .confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: -1;
+        }
+
+        .confirmation-modal .modal-content {
+            max-width: 400px;
+            width: 90%;
+            border-radius: 8px;
+            padding: 0;
+            background: var(--background-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            position: relative;
+            z-index: 1001;
+        }
+
+        .confirmation-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .confirmation-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .modal-close {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .confirmation-body {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .item-preview {
+            background: var(--secondary-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .warning-text {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-top: 15px;
+        }
+
+        .confirmation-footer {
+            padding: 15px 20px;
+            background: var(--secondary-color);
+            border-radius: 0 0 8px 8px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .cancel-button, .delete-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .cancel-button {
+            background: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .cancel-button:hover {
+            background: #e0e0e0;
+        }
+
+        .delete-button {
+            background: #dc3545;
+            color: white;
+        }
+
+        .delete-button:hover {
+            background: #c82333;
+        }
+    `;
+    document.head.appendChild(styleSheet);
+    document.body.appendChild(confirmModal);
 }
 
 // Funzione per cercare nella collezione
@@ -574,14 +740,13 @@ async function applyFilters() {
         // Applica il filtro per paese
         if (appState.filters.country) {
             console.log('Applying country filter:', appState.filters.country);
-            // Cerca il paese sia in maiuscolo che in minuscolo
             query = query.or(`country.ilike.%${appState.filters.country}%`);
         }
 
-        // Applica il filtro per epoca
-        if (appState.filters.era) {
-            console.log('Applying era filter:', appState.filters.era);
-            query = query.eq('era', appState.filters.era);
+        // Applica il filtro per continente
+        if (appState.filters.continente) {
+            console.log('Applying continent filter:', appState.filters.continente);
+            query = query.eq('continent', appState.filters.continente);
         }
 
         console.log('Executing query...');
@@ -636,8 +801,8 @@ function updatePagination(items) {
 
 // Rendering della collezione
 function renderCollection(items = appState.collection) {
-    // Forza 9 elementi per pagina
-    const itemsPerPage = 9;
+    // Forza 6 elementi per pagina
+    const itemsPerPage = 6;
     const start = (appState.currentPage - 1) * itemsPerPage;
     const end = start + itemsPerPage;
     const paginatedItems = items.slice(start, end);
@@ -645,8 +810,9 @@ function renderCollection(items = appState.collection) {
     const grid = document.querySelector('.collection-grid');
     grid.innerHTML = '';
     
-    paginatedItems.forEach(item => {
+    paginatedItems.forEach((item, index) => {
         const itemElement = createItemElement(item);
+        itemElement.style.animationDelay = `${index * 0.1}s`;
         grid.appendChild(itemElement);
     });
     
@@ -696,6 +862,24 @@ function renderCollection(items = appState.collection) {
 function createItemElement(item) {
     console.log('Creating item element with data:', item);
     
+    // Funzione per formattare la condizione
+    const formatCondition = (condition) => {
+        if (!condition) return '';
+        
+        // Mappa delle condizioni con la formattazione corretta
+        const conditionMap = {
+            'ottima': 'Ottima',
+            'molto-buona': 'Molto buona',
+            'buona': 'Buona',
+            'discreta': 'Discreta',
+            'sufficiente': 'Sufficiente',
+            'mediocre': 'Mediocre',
+            'scarsa': 'Scarsa'
+        };
+        
+        return conditionMap[condition.toLowerCase()] || condition;
+    };
+
     // Assicuriamoci che gli URL delle immagini siano assoluti
     const getAbsoluteUrl = (url) => {
         if (!url) return null;
@@ -734,11 +918,12 @@ function createItemElement(item) {
         </div>
         <div class="collection-info">
             <h3>${item.name}</h3>
-            ${item.country ? `<p>Paese: ${item.country}</p>` : ''}
-            ${item.year ? `<p>Emissione: ${item.year}</p>` : ''}
+            <p><strong>Paese:</strong> ${item.country || ''}</p>
+            <p><strong>Continente:</strong> ${item.continent || ''}</p>
+            <p><strong>Anno:</strong> ${item.year || ''}</p>
             ${item.description ? `<p>${item.description}</p>` : ''}
             <div class="collection-meta">
-                ${item.condition ? `<span>Condizione: ${item.condition}</span>` : ''}
+                ${item.condition ? `<span>Condizione: ${formatCondition(item.condition)}</span>` : ''}
                 <span>Aggiunta da: ${item.added_by || 'Sconosciuto'}</span>
                 <span>Data: ${new Date(item.added_date).toLocaleDateString()}</span>
             </div>
@@ -758,12 +943,12 @@ function updateStats() {
     const stats = {
         coins: appState.collection.filter(item => item.type === 'moneta').length,
         banknotes: appState.collection.filter(item => item.type === 'banconota').length,
-        countries: new Set(appState.collection.map(item => item.country)).size,
-        eras: new Set(appState.collection.map(item => item.era)).size
+        countries: new Set(appState.collection.filter(item => item.country && item.country.trim() !== '').map(item => item.country)).size,
+        continents: new Set(appState.collection.filter(item => item.continent && item.continent.trim() !== '').map(item => item.continent)).size
     };
     
     document.querySelectorAll('.stat-box h3').forEach((box, index) => {
-        const values = [stats.coins, stats.banknotes, stats.countries, stats.eras];
+        const values = [stats.coins, stats.banknotes, stats.countries, stats.continents];
         box.textContent = values[index];
     });
 }
@@ -832,6 +1017,7 @@ function showEditItemForm(id) {
     document.getElementById('name').value = item.name;
     document.getElementById('type').value = item.type;
     document.getElementById('country').value = item.country;
+    document.getElementById('continente').value = item.continent || '';
     document.getElementById('year').value = item.year;
     document.getElementById('condition').value = item.condition;
     document.getElementById('description').value = item.description;
@@ -978,6 +1164,54 @@ function initLightbox() {
     });
 }
 
+// Gestione del form di login
+function setupLoginForm() {
+    const loginForm = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+
+    // Imposta il campo password come testo normale
+    passwordInput.type = 'text';
+
+    // Gestione del submit del form
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        await login(email, password);
+    });
+
+    // Gestione del tasto Invio
+    passwordInput.addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            await login(email, password);
+        }
+    });
+}
+
+// Funzione per resettare i filtri
+function resetFilters() {
+    // Reset dei valori dei filtri nello stato
+    appState.filters = {
+        search: '',
+        type: '',
+        country: '',
+        continente: ''
+    };
+
+    // Reset dei campi del form
+    document.querySelector('.search-box').value = '';
+    document.querySelectorAll('.filter-control').forEach(select => {
+        select.value = '';
+    });
+
+    // Ricarica la collezione senza filtri
+    loadCollection();
+}
+
 // Inizializza le nuove funzionalità
 document.addEventListener('DOMContentLoaded', () => {
     // Imposta immediatamente il tema dark come default
@@ -987,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     
     // Imposta il numero di elementi per pagina
-    appState.itemsPerPage = 9;
+    appState.itemsPerPage = 6;
     console.log('Set itemsPerPage to:', appState.itemsPerPage);
     
     // Setup del menu mobile
@@ -1100,38 +1334,34 @@ document.addEventListener('DOMContentLoaded', () => {
             text-align: center;
             padding: 1rem;
         }
+
+        #userInfo button,
+        #addItemButton {
+            background-color: #C2B4A6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.3s ease;
+            flex: 1;
+            text-align: center;
+            margin: 0 4px;
+        }
+
+        #userInfo button:hover,
+        #addItemButton:hover {
+            background-color: #B5A698;
+        }
     `;
     document.head.appendChild(dynamicStyles);
     
     // Setup form di login
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        console.log('Form di login inviato');
-        
-        const email = e.target.email.value;
-        const password = e.target.password.value;
-        
-        console.log('Tentativo di login con email:', email);
-        
-        try {
-            const success = await login(email, password);
-            console.log('Risultato login:', success);
-            
-            if (success) {
-                console.log('Login riuscito, reset del form');
-                e.target.reset();
-            } else {
-                console.error('Login fallito');
-                alert('Credenziali non valide');
-            }
-        } catch (error) {
-            console.error('Errore durante il login:', error);
-            alert('Errore durante il login');
-        }
-    });
+    setupLoginForm();
     
     // Setup form elementi
-    document.getElementById('itemForm').addEventListener('submit', (e) => {
+    document.getElementById('itemForm').addEventListener('submit', async (e) => {
         e.preventDefault();
 
         // Recupera i valori attuali delle immagini già esistenti (solo in modifica)
@@ -1147,9 +1377,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const formData = {
-            name: e.target.name.value,
-            type: e.target.type.value,
+            name: e.target.name.value || null,
+            type: e.target.type.value || null,
             country: e.target.country.value || null,
+            continent: e.target.continente.value || null,
             year: e.target.year.value ? parseInt(e.target.year.value) : null,
             condition: e.target.condition.value || null,
             description: e.target.description.value || null,
@@ -1169,4 +1400,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initTheme();
     initLightbox();
+
+    const items = document.querySelectorAll('.collection-item');
+    
+    const revealOnScroll = () => {
+        items.forEach(item => {
+            const itemTop = item.getBoundingClientRect().top;
+            const windowHeight = window.innerHeight;
+            
+            // Rivela l'elemento quando è a 150px dal bordo inferiore della viewport
+            if (itemTop < windowHeight - 150) {
+                item.classList.add('reveal');
+            }
+        });
+    };
+
+    // Controlla gli elementi al caricamento della pagina
+    revealOnScroll();
+    
+    // Controlla gli elementi durante lo scroll
+    window.addEventListener('scroll', () => {
+        requestAnimationFrame(revealOnScroll);
+    });
+
+    // Aggiorna la struttura HTML dei filtri
+    const filterSection = document.querySelector('.filter-section');
+    const filterControls = filterSection.querySelector('.filter-controls');
+    
+    // Crea il contenitore per i pulsanti se non esiste
+    let filterButtons = filterSection.querySelector('.filter-buttons');
+    if (!filterButtons) {
+        filterButtons = document.createElement('div');
+        filterButtons.className = 'filter-buttons';
+        filterSection.appendChild(filterButtons);
+    }
+
+    // Sposta il pulsante Filtra esistente nel nuovo contenitore
+    const filterButton = document.getElementById('filterButton');
+    if (filterButton) {
+        filterButtons.appendChild(filterButton);
+    }
+
+    // Aggiungi il pulsante Annulla filtri
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Annulla filtri';
+    resetButton.className = filterButton.className; // Usa la stessa classe del pulsante Filtra
+    resetButton.onclick = resetFilters;
+    filterButtons.appendChild(resetButton);
 });

@@ -20,7 +20,7 @@
         <a href="#">Monete</a>
         <a href="#">Banconote</a>
         <a href="#">Paesi</a>
-        <a href="#">Epoche</a>
+        <a href="#">Continenti</a>
         <a href="#">Statistiche</a>
         <a href="#">Contatti</a>
             </div>
@@ -68,7 +68,7 @@
             </div>
             <div class="stat-box">
                 <h3>12</h3>
-                <p>Epoche</p>
+                <p>Continenti</p>
             </div>
         </section>
         
@@ -89,12 +89,14 @@
                     <option value="giappone">Giappone</option>
                     <option value="usa">Stati Uniti</option>
                 </select>
-                <select class="filter-control" name="era">
-                    <option value="">Tutte le epoche</option>
-                    <option value="antica">Antica</option>
-                    <option value="medievale">Medievale</option>
-                    <option value="moderna">Moderna</option>
-                    <option value="contemporanea">Contemporanea</option>
+                <select class="filter-control" name="continente">
+                    <option value="">Seleziona continente</option>
+                    <option value="Europa">Europa</option>
+                    <option value="Asia">Asia</option>
+                    <option value="Africa">Africa</option>
+                    <option value="Nord America">Nord America</option>
+                    <option value="Sud America">Sud America</option>
+                    <option value="Oceania">Oceania</option>
                 </select>
                 <button id="filterButton">Filtra</button>
             </div>
@@ -145,6 +147,19 @@
                 <div class="form-group">
                     <label for="country">Paese</label>
                     <input type="text" id="country" name="country">
+                </div>
+                
+                <div class="form-group">
+                    <label for="continente">Continente</label>
+                    <select id="continente" name="continente">
+                        <option value="">Seleziona continente</option>
+                        <option value="Europa">Europa</option>
+                        <option value="Asia">Asia</option>
+                        <option value="Africa">Africa</option>
+                        <option value="Nord America">Nord America</option>
+                        <option value="Sud America">Sud America</option>
+                        <option value="Oceania">Oceania</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
