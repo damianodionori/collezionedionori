@@ -167,11 +167,7 @@ function setupImageDropZone() {
 // Funzione per caricare la collezione
 async function loadCollection() {
     try {
-        if (!appState.isAuthenticated) {
-            console.log('User not authenticated');
-            return;
-        }
-
+        // Rimuovo il controllo di autenticazione per permettere la visualizzazione a tutti
         const { data, error } = await supabase
             .from('collection')
             .select('*')
@@ -724,7 +720,8 @@ async function applyFilters() {
         console.log('Building query with filters:', appState.filters);
         let query = supabase
             .from('collection')
-            .select('*');
+            .select('*')
+            .order('added_date', { ascending: false });
 
         // Costruisci un array di condizioni OR per la ricerca
         let searchConditions = [];
@@ -1111,6 +1108,60 @@ function initTheme() {
     });
 }
 
+// Pulsante "Torna su"
+function initScrollToTop() {
+    const scrollButton = document.createElement('button');
+    scrollButton.className = 'scroll-to-top';
+    scrollButton.innerHTML = '↑';
+    scrollButton.style.display = 'none';
+    document.body.appendChild(scrollButton);
+
+    // Mostra/nascondi il pulsante in base allo scroll
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+            scrollButton.style.display = 'flex';
+        } else {
+            scrollButton.style.display = 'none';
+        }
+    });
+
+    // Scroll to top quando si clicca il pulsante
+    scrollButton.addEventListener('click', () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    // Aggiungi stili CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        .scroll-to-top {
+            position: fixed;
+            bottom: 2rem;
+            left: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            border: none;
+            cursor: pointer;
+            box-shadow: var(--box-shadow);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .scroll-to-top:hover {
+            transform: scale(1.1);
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 // Lightbox
 function initLightbox() {
     const lightbox = document.createElement('div');
@@ -1285,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Controllo autenticazione
     checkAuthStatus();
     
-    // Caricamento collezione
+    // Caricamento collezione (senza attendere l'autenticazione)
     loadCollection();
     
     // Setup della drop zone per le immagini
@@ -1330,6 +1381,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Animazione smooth per i link della navbar
     document.querySelectorAll('.nav-links a').forEach(link => {
         link.addEventListener('click', (e) => {
+            e.preventDefault();
             const href = link.getAttribute('href');
             if (href.startsWith('#')) {
                 e.preventDefault();
@@ -1502,4 +1554,31 @@ document.addEventListener('DOMContentLoaded', () => {
     resetButton.className = filterButton.className; // Usa la stessa classe del pulsante Filtra
     resetButton.onclick = resetFilters;
     filterButtons.appendChild(resetButton);
+
+    // Gestione click sui link della navbar
+    document.querySelectorAll('.nav-links a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const text = link.textContent.toLowerCase();
+            if (text === 'monete') {
+                appState.filters.type = 'moneta';
+            } else if (text === 'banconote') {
+                appState.filters.type = 'banconota';
+            }
+            applyFilters();
+            
+            // Chiudi il menu mobile se aperto
+            const menuToggle = document.getElementById('menuToggle');
+            const navLinks = document.querySelector('.nav-links');
+            menuToggle.classList.remove('active');
+            navLinks.classList.remove('show');
+
+            // Scroll alla sezione della collezione
+            const collectionSection = document.querySelector('.collection-grid');
+            collectionSection.scrollIntoView({ behavior: 'smooth' });
+        });
+    });
+
+    // Inizializza il pulsante "Torna su"
+    initScrollToTop();
 });
