@@ -166,27 +166,33 @@ function setupImageDropZone() {
 
 // Funzione per caricare la collezione
 async function loadCollection() {
-    // Carica gli elementi di tutti gli utenti autorizzati
-    const { data, error } = await supabase
-        .from('collection')
-        .select('*')
-        .order('id', { ascending: true });
+    try {
+        if (!appState.isAuthenticated) {
+            console.log('User not authenticated');
+            return;
+        }
 
-    if (error) {
-        console.error('Error loading collection:', error);
-        return;
+        const { data, error } = await supabase
+            .from('collection')
+            .select('*')
+            .order('added_date', { ascending: false });
+
+        if (error) {
+            console.error('Error loading collection:', error);
+            return;
+        }
+
+        appState.collection = data;
+        console.log('Collection loaded:', data);
+        
+        // Aggiorna il menu a tendina dei paesi dopo aver caricato la collezione
+        await updateCountryDropdown();
+        
+        renderCollection();
+        updateStats();
+    } catch (error) {
+        console.error('Error in loadCollection:', error);
     }
-
-    // Converti tutti gli URL delle immagini in URL assoluti
-    appState.collection = (data || []).map(item => ({
-        ...item,
-        front_image: item.front_image ? new URL(item.front_image, supabaseUrl).toString() : null,
-        back_image: item.back_image ? new URL(item.back_image, supabaseUrl).toString() : null
-    }));
-
-    console.log('Collection loaded with converted URLs:', appState.collection);
-    renderCollection();
-    updateStats();
 }
 
 // Funzione per caricare un'immagine su Supabase Storage
@@ -316,6 +322,8 @@ async function addItem(item) {
     appState.collection.push(data[0]);
     renderCollection();
     updateStats();
+    // Aggiorna il menu a tendina dei paesi dopo aver aggiunto un nuovo elemento
+    await updateCountryDropdown();
 }
 
 // Funzione per aggiornare un elemento
@@ -1210,6 +1218,53 @@ function resetFilters() {
 
     // Ricarica la collezione senza filtri
     loadCollection();
+}
+
+// Funzione per ottenere i paesi unici dalla collezione
+async function getUniqueCountries() {
+    try {
+        const { data, error } = await supabase
+            .from('collection')
+            .select('country')
+            .not('country', 'is', null)
+            .not('country', 'eq', '');
+
+        if (error) {
+            console.error('Error fetching countries:', error);
+            return [];
+        }
+
+        // Estrai i paesi unici e ordinali alfabeticamente
+        const uniqueCountries = [...new Set(data.map(item => item.country))]
+            .filter(country => country && country.trim() !== '')
+            .sort();
+
+        return uniqueCountries;
+    } catch (error) {
+        console.error('Error in getUniqueCountries:', error);
+        return [];
+    }
+}
+
+// Funzione per aggiornare il menu a tendina dei paesi
+async function updateCountryDropdown() {
+    try {
+        const countries = await getUniqueCountries();
+        const countrySelect = document.querySelector('select[name="country"]');
+        
+        // Mantieni solo l'opzione predefinita
+        countrySelect.innerHTML = '<option value="">Tutti i paesi</option>';
+        
+        // Aggiungi i paesi come opzioni
+        countries.forEach(country => {
+            const option = document.createElement('option');
+            option.value = country;
+            option.textContent = country;
+            countrySelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error updating country dropdown:', error);
+    }
 }
 
 // Inizializza le nuove funzionalità
