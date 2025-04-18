@@ -719,9 +719,9 @@ footer {
         bottom: 0;
         left: 15%;
         right: 15%;
-        height: 1px;
+        height: 10px;
         background-color: var(--accent-color);
-        opacity: 0.3;
+        opacity: 0.8;
     }
 
     .nav-links a:hover {
@@ -1165,9 +1165,9 @@ footer {
         bottom: 0;
         left: 15%;
         right: 15%;
-        height: 1px;
+        height: 2px;
         background-color: var(--accent-color);
-        opacity: 0.3;
+        opacity: 0.5;
     }
 
     .nav-links a:hover {
