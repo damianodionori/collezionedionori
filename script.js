@@ -712,11 +712,6 @@ async function applyFilters() {
     try {
         console.log('Starting filter application...');
         
-        if (!appState.isAuthenticated) {
-            console.log('User not authenticated');
-            return;
-        }
-
         console.log('Building query with filters:', appState.filters);
         let query = supabase
             .from('collection')
