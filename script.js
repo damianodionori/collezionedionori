@@ -834,21 +834,80 @@ async function applyFilters() {
 // Versione con debounce della funzione applyFilters
 const debouncedApplyFilters = debounce(applyFilters, 300);
 
+console.log('JS PAGINAZIONE COMPATTA ATTIVO');
 // Gestione della paginazione
 function updatePagination(items) {
-    const totalPages = Math.ceil(items.length / appState.itemsPerPage);
     const paginationElement = document.querySelector('.pagination');
     paginationElement.innerHTML = '';
-    
-    for (let i = 1; i <= totalPages; i++) {
+    const totalPages = Math.ceil(items.length / appState.itemsPerPage);
+    const currentPage = appState.currentPage;
+
+    if (totalPages <= 1) return;
+
+    // Freccia indietro
+    if (currentPage > 1) {
+        const prevButton = document.createElement('button');
+        prevButton.textContent = '←';
+        prevButton.onclick = () => {
+            appState.currentPage--;
+            renderCollection(items);
+        };
+        paginationElement.appendChild(prevButton);
+    }
+
+    // Prima pagina
+    addPageButton(1);
+
+    // Ellissi dopo la prima pagina
+    if (currentPage > 3) {
+        addEllipsis();
+    }
+
+    // Pagina corrente (se non è la prima o l'ultima)
+    if (currentPage !== 1 && currentPage !== totalPages) {
+        if (currentPage > 2 && currentPage < totalPages - 1) {
+            addPageButton(currentPage);
+        }
+    }
+
+    // Ellissi prima dell'ultima pagina
+    if (currentPage < totalPages - 2) {
+        addEllipsis();
+    }
+
+    // Ultima pagina (se più di una)
+    if (totalPages > 1) {
+        addPageButton(totalPages);
+    }
+
+    // Freccia avanti
+    if (currentPage < totalPages) {
+        const nextButton = document.createElement('button');
+        nextButton.textContent = '→';
+        nextButton.onclick = () => {
+            appState.currentPage++;
+            renderCollection(items);
+        };
+        paginationElement.appendChild(nextButton);
+    }
+
+    function addPageButton(page) {
+        console.log('Creo bottone pagina:', page); // DEBUG
         const button = document.createElement('button');
-        button.textContent = i;
-        button.classList.toggle('active', i === appState.currentPage);
-        button.addEventListener('click', () => {
-            appState.currentPage = i;
-            renderCollection();
-        });
+        button.textContent = page;
+        button.classList.toggle('active', page === currentPage);
+        button.onclick = () => {
+            appState.currentPage = page;
+            renderCollection(items);
+        };
         paginationElement.appendChild(button);
+    }
+
+    function addEllipsis() {
+        const ellipsis = document.createElement('span');
+        ellipsis.textContent = '...';
+        ellipsis.className = 'pagination-ellipsis';
+        paginationElement.appendChild(ellipsis);
     }
 }
 
@@ -869,46 +928,8 @@ function renderCollection(items = appState.collection) {
         grid.appendChild(itemElement);
     });
     
-    // Aggiorna la paginazione con il nuovo numero di elementi per pagina
-    const totalPages = Math.ceil(items.length / itemsPerPage);
-    const paginationElement = document.querySelector('.pagination');
-    paginationElement.innerHTML = '';
-    
-    if (totalPages > 1) {
-        // Aggiungi pulsante precedente se non siamo alla prima pagina
-        if (appState.currentPage > 1) {
-            const prevButton = document.createElement('button');
-            prevButton.textContent = '←';
-            prevButton.onclick = () => {
-                appState.currentPage--;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(prevButton);
-        }
-        
-        // Aggiungi numeri di pagina
-        for (let i = 1; i <= totalPages; i++) {
-            const button = document.createElement('button');
-            button.textContent = i;
-            button.classList.toggle('active', i === appState.currentPage);
-            button.onclick = () => {
-                appState.currentPage = i;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(button);
-        }
-        
-        // Aggiungi pulsante successivo se non siamo all'ultima pagina
-        if (appState.currentPage < totalPages) {
-            const nextButton = document.createElement('button');
-            nextButton.textContent = '→';
-            nextButton.onclick = () => {
-                appState.currentPage++;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(nextButton);
-        }
-    }
+    // Usa la paginazione compatta con ellissi
+    updatePagination(items);
 }
 
 // Creazione elemento della collezione
