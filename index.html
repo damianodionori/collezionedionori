@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Numismatica Dionori - La Nostra Collezione</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icons/192-collezione.png">
 </head>
 <body>
     <nav class="navbar">
@@ -101,14 +103,7 @@
             <!-- Gli elementi della collezione verranno inseriti dinamicamente via JavaScript -->
         </section>
         
-        <div class="pagination">
-            <button>1</button>
-            <button>2</button>
-            <button>3</button>
-            <button>...</button>
-            <button>10</button>
-            <button>→</button>
-        </div>
+        <div class="pagination"></div>
     </main>
     
     <footer>
@@ -214,6 +209,6 @@
         const { createClient } = supabase;
         window.createClient = createClient;
     </script>
-    <script src="script.js?v=2"></script>
+    <script src="script.js?v=999"></script>
 </body>
 </html>

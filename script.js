@@ -6,6 +6,19 @@ const supabase = window.createClient(supabaseUrl, supabaseKey)
 // Verifica che il client Supabase sia stato inizializzato correttamente
 console.log('Supabase client inizializzato:', supabase);
 
+// Registrazione del Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('ServiceWorker registrato:', registration);
+            })
+            .catch(error => {
+                console.log('Errore nella registrazione del ServiceWorker:', error);
+            });
+    });
+}
+
 // Gestione dello stato dell'applicazione
 const appState = {
     isAuthenticated: false,
@@ -164,10 +177,45 @@ function setupImageDropZone() {
     };
 }
 
+// Funzione per salvare lo stato dell'applicazione
+function saveAppState() {
+    const stateToSave = {
+        currentPage: appState.currentPage,
+        filters: appState.filters,
+        collection: appState.collection
+    };
+    localStorage.setItem('appState', JSON.stringify(stateToSave));
+}
+
+// Funzione per caricare lo stato dell'applicazione
+function loadAppState() {
+    const savedState = localStorage.getItem('appState');
+    if (savedState) {
+        const state = JSON.parse(savedState);
+        appState.currentPage = state.currentPage || 1;
+        appState.filters = state.filters || {
+            search: '',
+            type: '',
+            country: '',
+            continente: ''
+        };
+        appState.collection = state.collection || [];
+        
+        // Applica i filtri salvati
+        document.querySelector('.search-box').value = appState.filters.search;
+        document.querySelectorAll('.filter-control').forEach(select => {
+            select.value = appState.filters[select.name] || '';
+        });
+        
+        // Renderizza la collezione con lo stato salvato
+        renderCollection();
+        updateStats();
+    }
+}
+
 // Funzione per caricare la collezione
 async function loadCollection() {
     try {
-        // Rimuovo il controllo di autenticazione per permettere la visualizzazione a tutti
         const { data, error } = await supabase
             .from('collection')
             .select('*')
@@ -181,7 +229,10 @@ async function loadCollection() {
         appState.collection = data;
         console.log('Collection loaded:', data);
         
-        // Aggiorna il menu a tendina dei paesi dopo aver caricato la collezione
+        // Salva lo stato dopo il caricamento
+        saveAppState();
+        
+        // Aggiorna il menu a tendina dei paesi
         await updateCountryDropdown();
         
         renderCollection();
@@ -769,8 +820,10 @@ async function applyFilters() {
         // Resetta la pagina corrente
         appState.currentPage = 1;
         
+        // Salva lo stato dopo l'applicazione dei filtri
+        saveAppState();
+        
         console.log('Rendering filtered collection...');
-        // Renderizza la collezione filtrata
         renderCollection();
         updateStats();
     } catch (error) {
@@ -781,21 +834,80 @@ async function applyFilters() {
 // Versione con debounce della funzione applyFilters
 const debouncedApplyFilters = debounce(applyFilters, 300);
 
+console.log('JS PAGINAZIONE COMPATTA ATTIVO');
 // Gestione della paginazione
 function updatePagination(items) {
-    const totalPages = Math.ceil(items.length / appState.itemsPerPage);
     const paginationElement = document.querySelector('.pagination');
     paginationElement.innerHTML = '';
-    
-    for (let i = 1; i <= totalPages; i++) {
+    const totalPages = Math.ceil(items.length / appState.itemsPerPage);
+    const currentPage = appState.currentPage;
+
+    if (totalPages <= 1) return;
+
+    // Freccia indietro
+    if (currentPage > 1) {
+        const prevButton = document.createElement('button');
+        prevButton.textContent = '←';
+        prevButton.onclick = () => {
+            appState.currentPage--;
+            renderCollection(items);
+        };
+        paginationElement.appendChild(prevButton);
+    }
+
+    // Prima pagina
+    addPageButton(1);
+
+    // Ellissi dopo la prima pagina
+    if (currentPage > 3) {
+        addEllipsis();
+    }
+
+    // Pagina corrente (se non è la prima o l'ultima)
+    if (currentPage !== 1 && currentPage !== totalPages) {
+        if (currentPage > 2 && currentPage < totalPages - 1) {
+            addPageButton(currentPage);
+        }
+    }
+
+    // Ellissi prima dell'ultima pagina
+    if (currentPage < totalPages - 2) {
+        addEllipsis();
+    }
+
+    // Ultima pagina (se più di una)
+    if (totalPages > 1) {
+        addPageButton(totalPages);
+    }
+
+    // Freccia avanti
+    if (currentPage < totalPages) {
+        const nextButton = document.createElement('button');
+        nextButton.textContent = '→';
+        nextButton.onclick = () => {
+            appState.currentPage++;
+            renderCollection(items);
+        };
+        paginationElement.appendChild(nextButton);
+    }
+
+    function addPageButton(page) {
+        console.log('Creo bottone pagina:', page); // DEBUG
         const button = document.createElement('button');
-        button.textContent = i;
-        button.classList.toggle('active', i === appState.currentPage);
-        button.addEventListener('click', () => {
-            appState.currentPage = i;
-            renderCollection();
-        });
+        button.textContent = page;
+        button.classList.toggle('active', page === currentPage);
+        button.onclick = () => {
+            appState.currentPage = page;
+            renderCollection(items);
+        };
         paginationElement.appendChild(button);
+    }
+
+    function addEllipsis() {
+        const ellipsis = document.createElement('span');
+        ellipsis.textContent = '...';
+        ellipsis.className = 'pagination-ellipsis';
+        paginationElement.appendChild(ellipsis);
     }
 }
 
@@ -816,46 +928,8 @@ function renderCollection(items = appState.collection) {
         grid.appendChild(itemElement);
     });
     
-    // Aggiorna la paginazione con il nuovo numero di elementi per pagina
-    const totalPages = Math.ceil(items.length / itemsPerPage);
-    const paginationElement = document.querySelector('.pagination');
-    paginationElement.innerHTML = '';
-    
-    if (totalPages > 1) {
-        // Aggiungi pulsante precedente se non siamo alla prima pagina
-        if (appState.currentPage > 1) {
-            const prevButton = document.createElement('button');
-            prevButton.textContent = '←';
-            prevButton.onclick = () => {
-                appState.currentPage--;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(prevButton);
-        }
-        
-        // Aggiungi numeri di pagina
-        for (let i = 1; i <= totalPages; i++) {
-            const button = document.createElement('button');
-            button.textContent = i;
-            button.classList.toggle('active', i === appState.currentPage);
-            button.onclick = () => {
-                appState.currentPage = i;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(button);
-        }
-        
-        // Aggiungi pulsante successivo se non siamo all'ultima pagina
-        if (appState.currentPage < totalPages) {
-            const nextButton = document.createElement('button');
-            nextButton.textContent = '→';
-            nextButton.onclick = () => {
-                appState.currentPage++;
-                renderCollection(items);
-            };
-            paginationElement.appendChild(nextButton);
-        }
-    }
+    // Usa la paginazione compatta con ellissi
+    updatePagination(items);
 }
 
 // Creazione elemento della collezione
@@ -1331,6 +1405,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Controllo autenticazione
     checkAuthStatus();
     
+    // Carica lo stato salvato
+    loadAppState();
+    
     // Caricamento collezione (senza attendere l'autenticazione)
     loadCollection();
     
@@ -1576,4 +1653,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Inizializza il pulsante "Torna su"
     initScrollToTop();
+
+    // Salva lo stato quando l'utente lascia la pagina
+    window.addEventListener('beforeunload', () => {
+        saveAppState();
+    });
 });
