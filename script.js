@@ -9,7 +9,7 @@ console.log('Supabase client inizializzato:', supabase);
 // Registrazione del Service Worker
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('/collezionedionori/sw.js')
             .then(registration => {
                 console.log('ServiceWorker registrato:', registration);
             })
