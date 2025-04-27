@@ -2,7 +2,7 @@
     "name": "Collezione Dionori",
     "short_name": "Collezione",
     "description": "Gestione della collezione di monete e banconote",
-    "start_url": "/",
+    "start_url": "/collezionedionori/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#C2B4A6",
