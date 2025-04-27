@@ -1,0 +1,21 @@
+{
+    "name": "Collezione Dionori",
+    "short_name": "Collezione",
+    "description": "Gestione della collezione di monete e banconote",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#C2B4A6",
+    "icons": [
+        {
+            "src": "/icons/192-collezione.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/512-collezione.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+} 

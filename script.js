@@ -6,6 +6,19 @@ const supabase = window.createClient(supabaseUrl, supabaseKey)
 // Verifica che il client Supabase sia stato inizializzato correttamente
 console.log('Supabase client inizializzato:', supabase);
 
+// Registrazione del Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('ServiceWorker registrato:', registration);
+            })
+            .catch(error => {
+                console.log('Errore nella registrazione del ServiceWorker:', error);
+            });
+    });
+}
+
 // Gestione dello stato dell'applicazione
 const appState = {
     isAuthenticated: false,
@@ -164,10 +177,45 @@ function setupImageDropZone() {
     };
 }
 
+// Funzione per salvare lo stato dell'applicazione
+function saveAppState() {
+    const stateToSave = {
+        currentPage: appState.currentPage,
+        filters: appState.filters,
+        collection: appState.collection
+    };
+    localStorage.setItem('appState', JSON.stringify(stateToSave));
+}
+
+// Funzione per caricare lo stato dell'applicazione
+function loadAppState() {
+    const savedState = localStorage.getItem('appState');
+    if (savedState) {
+        const state = JSON.parse(savedState);
+        appState.currentPage = state.currentPage || 1;
+        appState.filters = state.filters || {
+            search: '',
+            type: '',
+            country: '',
+            continente: ''
+        };
+        appState.collection = state.collection || [];
+        
+        // Applica i filtri salvati
+        document.querySelector('.search-box').value = appState.filters.search;
+        document.querySelectorAll('.filter-control').forEach(select => {
+            select.value = appState.filters[select.name] || '';
+        });
+        
+        // Renderizza la collezione con lo stato salvato
+        renderCollection();
+        updateStats();
+    }
+}
+
 // Funzione per caricare la collezione
 async function loadCollection() {
     try {
-        // Rimuovo il controllo di autenticazione per permettere la visualizzazione a tutti
         const { data, error } = await supabase
             .from('collection')
             .select('*')
@@ -181,7 +229,10 @@ async function loadCollection() {
         appState.collection = data;
         console.log('Collection loaded:', data);
         
-        // Aggiorna il menu a tendina dei paesi dopo aver caricato la collezione
+        // Salva lo stato dopo il caricamento
+        saveAppState();
+        
+        // Aggiorna il menu a tendina dei paesi
         await updateCountryDropdown();
         
         renderCollection();
@@ -769,8 +820,10 @@ async function applyFilters() {
         // Resetta la pagina corrente
         appState.currentPage = 1;
         
+        // Salva lo stato dopo l'applicazione dei filtri
+        saveAppState();
+        
         console.log('Rendering filtered collection...');
-        // Renderizza la collezione filtrata
         renderCollection();
         updateStats();
     } catch (error) {
@@ -1331,6 +1384,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Controllo autenticazione
     checkAuthStatus();
     
+    // Carica lo stato salvato
+    loadAppState();
+    
     // Caricamento collezione (senza attendere l'autenticazione)
     loadCollection();
     
@@ -1576,4 +1632,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Inizializza il pulsante "Torna su"
     initScrollToTop();
+
+    // Salva lo stato quando l'utente lascia la pagina
+    window.addEventListener('beforeunload', () => {
+        saveAppState();
+    });
 });
