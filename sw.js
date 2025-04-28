@@ -35,18 +35,72 @@ self.addEventListener('activate', (event) => {
 
 // Intercettazione delle richieste
 self.addEventListener('fetch', (event) => {
+    // Gestione speciale per le richieste API
+    if (event.request.url.includes('/api/')) {
+        event.respondWith(
+            fetch(event.request)
+                .then((response) => {
+                    const responseToCache = response.clone();
+                    caches.open(CACHE_NAME)
+                        .then((cache) => {
+                            cache.put(event.request, responseToCache);
+                        });
+                    return response;
+                })
+                .catch(() => {
+                    return caches.match(event.request);
+                })
+        );
+        return;
+    }
+
+    // Gestione speciale per le immagini di Supabase
+    if (event.request.url.includes('supabase.co/storage/v1/object/public/')) {
+        event.respondWith(
+            caches.match(event.request)
+                .then((response) => {
+                    if (response) {
+                        return response;
+                    }
+
+                    return fetch(event.request)
+                        .then((response) => {
+                            if (!response || response.status !== 200) {
+                                return response;
+                            }
+
+                            const responseToCache = response.clone();
+                            caches.open(CACHE_NAME)
+                                .then((cache) => {
+                                    cache.put(event.request, responseToCache);
+                                });
+
+                            return response;
+                        })
+                        .catch(() => {
+                            return new Response('Immagine non disponibile offline', {
+                                status: 503,
+                                statusText: 'Service Unavailable',
+                                headers: new Headers({
+                                    'Content-Type': 'text/plain'
+                                })
+                            });
+                        });
+                })
+        );
+        return;
+    }
+
+    // Gestione standard per altre richieste
     event.respondWith(
         caches.match(event.request)
             .then((response) => {
-                // Se la risorsa è nella cache, la restituisce
                 if (response) {
                     return response;
                 }
 
-                // Altrimenti fa la richiesta alla rete
                 return fetch(event.request)
                     .then((response) => {
-                        // Se la risposta è valida, la salva nella cache
                         if (!response || response.status !== 200 || response.type !== 'basic') {
                             return response;
                         }
@@ -58,6 +112,15 @@ self.addEventListener('fetch', (event) => {
                             });
 
                         return response;
+                    })
+                    .catch(() => {
+                        return new Response('Offline - Contenuto non disponibile', {
+                            status: 503,
+                            statusText: 'Service Unavailable',
+                            headers: new Headers({
+                                'Content-Type': 'text/plain'
+                            })
+                        });
                     });
             })
     );
