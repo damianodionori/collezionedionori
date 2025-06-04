@@ -700,6 +700,28 @@ async function importCollection(file) {
         try {
             const items = JSON.parse(e.target.result);
             
+            // Leggi il file CSV con la mappatura delle immagini
+            const csvResponse = await fetch('links.csv');
+            if (!csvResponse.ok) {
+                throw new Error(`Errore nel caricamento del file CSV: ${csvResponse.status} ${csvResponse.statusText}`);
+            }
+            const csvText = await csvResponse.text();
+            const imageMapping = {};
+            
+            // Parsa il CSV e crea la mappatura
+            csvText.split('\n').forEach(line => {
+                // Ignora le righe vuote e i commenti
+                if (!line.trim() || line.trim().startsWith('#')) return;
+                
+                const [supabaseName, driveUrl] = line.split(',').map(s => s.trim());
+                if (supabaseName && driveUrl) {
+                    console.log(`Mappatura trovata: ${supabaseName} -> ${driveUrl}`);
+                    imageMapping[supabaseName] = driveUrl;
+                }
+            });
+            
+            console.log('Mappatura immagini creata:', imageMapping);
+            
             // Elimina tutti gli elementi esistenti
             const { error: deleteError } = await supabase
                 .from('collection')
@@ -711,19 +733,43 @@ async function importCollection(file) {
                 return;
             }
 
-            // Inserisci i nuovi elementi
+            // Inserisci i nuovi elementi con i link di Google Drive e tutti i dati dal JSON
             const { data, error: insertError } = await supabase
                 .from('collection')
                 .insert(
-                    items.map(item => ({
-                        user_id: user.id,
-                        name: item.name,
-                        description: item.description,
-                        front_image: item.front_image,
-                        back_image: item.back_image,
-                        condition: item.condition,
-                        notes: item.notes
-                    }))
+                    items.map(item => {
+                        // Estrai il nome del file dall'URL di Supabase
+                        const getFileNameFromUrl = (url) => {
+                            if (!url) return null;
+                            const parts = url.split('/');
+                            const fileName = parts[parts.length - 1];
+                            return fileName;
+                        };
+
+                        // Ottieni il link di Google Drive per l'immagine
+                        const getDriveUrl = (supabaseUrl) => {
+                            if (!supabaseUrl) return null;
+                            const fileName = getFileNameFromUrl(supabaseUrl);
+                            return fileName ? imageMapping[fileName] || supabaseUrl : null;
+                        };
+
+                        // Usa i dati originali dal JSON, senza sovrascrivere nulla!
+                        return {
+                            user_id: user.id,
+                            name: item.name,
+                            description: item.description,
+                            front_image: getDriveUrl(item.front_image),
+                            back_image: getDriveUrl(item.back_image),
+                            type: item.type,
+                            country: item.country,
+                            continent: item.continent || item.continente || null,
+                            year: item.year,
+                            condition: item.condition,
+                            notes: item.notes,
+                            added_by: item.added_by,
+                            added_date: item.added_date
+                        };
+                    })
                 )
                 .select();
 
@@ -736,8 +782,8 @@ async function importCollection(file) {
             renderCollection();
             alert('Collezione importata con successo!');
         } catch (error) {
-            console.error('Error parsing JSON:', error);
-            alert('Errore durante l\'importazione della collezione');
+            console.error('Error parsing JSON or CSV:', error);
+            alert(`Errore durante l'importazione della collezione: ${error.message}`);
         }
     };
     reader.readAsText(file);
@@ -952,19 +998,9 @@ function createItemElement(item) {
         return conditionMap[condition.toLowerCase()] || condition;
     };
 
-    // Assicuriamoci che gli URL delle immagini siano assoluti
-    const getAbsoluteUrl = (url) => {
-        if (!url) return null;
-        try {
-            return new URL(url, supabaseUrl).toString();
-        } catch (e) {
-            console.error('Error creating absolute URL:', e);
-            return url;
-        }
-    };
-
-    const frontImageUrl = getAbsoluteUrl(item.front_image);
-    const backImageUrl = getAbsoluteUrl(item.back_image);
+    // Usa direttamente gli URL delle immagini senza conversione
+    const frontImageUrl = item.front_image;
+    const backImageUrl = item.back_image;
 
     const div = document.createElement('div');
     div.className = 'collection-item';
@@ -972,13 +1008,13 @@ function createItemElement(item) {
         <div class="collection-images">
             ${frontImageUrl ? `
                 <div class="collection-image">
-                    <img src="${frontImageUrl}" alt="${item.name} - Fronte">
+                    <img src="${frontImageUrl}" alt="${item.name} - Fronte" loading="lazy">
                     <span class="image-label">Fronte</span>
                 </div>
             ` : ''}
             ${backImageUrl ? `
                 <div class="collection-image">
-                    <img src="${backImageUrl}" alt="${item.name} - Retro">
+                    <img src="${backImageUrl}" alt="${item.name} - Retro" loading="lazy">
                     <span class="image-label">Retro</span>
                 </div>
             ` : ''}
