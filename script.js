@@ -721,8 +721,6 @@ async function importCollection(file) {
                         description: item.description,
                         front_image: item.front_image,
                         back_image: item.back_image,
-                        price: item.price,
-                        purchase_date: item.purchase_date,
                         condition: item.condition,
                         notes: item.notes
                     }))
