@@ -249,65 +249,27 @@ async function uploadImage(file, userId) {
         return null;
     }
     
-    console.log('Starting upload process:', {
-        fileName: file.name,
-        userId: userId,
-        fileSize: file.size,
-        fileType: file.type,
-        file: file
-    });
-    
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
     const filePath = `${userId}/${fileName}`;
     
-    console.log('Upload path:', filePath);
-    
     try {
-        console.log('Attempting to upload file to Supabase storage...');
         const { data, error } = await supabase.storage
             .from('collection-images')
             .upload(filePath, file);
             
         if (error) {
             console.error('Error uploading image:', error);
-            console.error('Error details:', {
-                message: error.message,
-                statusCode: error.statusCode,
-                name: error.name,
-                details: error.details,
-                hint: error.hint
-            });
             return null;
         }
         
-        console.log('Upload successful, storage response:', data);
-        
-        console.log('Generating public URL...');
         const { data: { publicUrl } } = supabase.storage
             .from('collection-images')
             .getPublicUrl(filePath);
         
-        // Assicuriamoci che l'URL sia assoluto e funzionante
-        const absoluteUrl = new URL(publicUrl, supabaseUrl).toString();
-        console.log('Generated absolute URL:', absoluteUrl);
-        
-        // Verifica che l'URL sia accessibile
-        try {
-            const response = await fetch(absoluteUrl, { method: 'HEAD' });
-            console.log('URL accessibility check:', {
-                status: response.status,
-                ok: response.ok,
-                url: absoluteUrl
-            });
-        } catch (e) {
-            console.error('Error checking URL accessibility:', e);
-        }
-            
-        return absoluteUrl;
+        return publicUrl;
     } catch (error) {
         console.error('Exception during upload:', error);
-        console.error('Stack trace:', error.stack);
         return null;
     }
 }
@@ -700,28 +662,6 @@ async function importCollection(file) {
         try {
             const items = JSON.parse(e.target.result);
             
-            // Leggi il file CSV con la mappatura delle immagini
-            const csvResponse = await fetch('links.csv');
-            if (!csvResponse.ok) {
-                throw new Error(`Errore nel caricamento del file CSV: ${csvResponse.status} ${csvResponse.statusText}`);
-            }
-            const csvText = await csvResponse.text();
-            const imageMapping = {};
-            
-            // Parsa il CSV e crea la mappatura
-            csvText.split('\n').forEach(line => {
-                // Ignora le righe vuote e i commenti
-                if (!line.trim() || line.trim().startsWith('#')) return;
-                
-                const [supabaseName, driveUrl] = line.split(',').map(s => s.trim());
-                if (supabaseName && driveUrl) {
-                    console.log(`Mappatura trovata: ${supabaseName} -> ${driveUrl}`);
-                    imageMapping[supabaseName] = driveUrl;
-                }
-            });
-            
-            console.log('Mappatura immagini creata:', imageMapping);
-            
             // Elimina tutti gli elementi esistenti
             const { error: deleteError } = await supabase
                 .from('collection')
@@ -733,43 +673,25 @@ async function importCollection(file) {
                 return;
             }
 
-            // Inserisci i nuovi elementi con i link di Google Drive e tutti i dati dal JSON
+            // Inserisci i nuovi elementi mantenendo i dati originali
             const { data, error: insertError } = await supabase
                 .from('collection')
                 .insert(
-                    items.map(item => {
-                        // Estrai il nome del file dall'URL di Supabase
-                        const getFileNameFromUrl = (url) => {
-                            if (!url) return null;
-                            const parts = url.split('/');
-                            const fileName = parts[parts.length - 1];
-                            return fileName;
-                        };
-
-                        // Ottieni il link di Google Drive per l'immagine
-                        const getDriveUrl = (supabaseUrl) => {
-                            if (!supabaseUrl) return null;
-                            const fileName = getFileNameFromUrl(supabaseUrl);
-                            return fileName ? imageMapping[fileName] || supabaseUrl : null;
-                        };
-
-                        // Usa i dati originali dal JSON, senza sovrascrivere nulla!
-                        return {
-                            user_id: user.id,
-                            name: item.name,
-                            description: item.description,
-                            front_image: getDriveUrl(item.front_image),
-                            back_image: getDriveUrl(item.back_image),
-                            type: item.type,
-                            country: item.country,
-                            continent: item.continent || item.continente || null,
-                            year: item.year,
-                            condition: item.condition,
-                            notes: item.notes,
-                            added_by: item.added_by,
-                            added_date: item.added_date
-                        };
-                    })
+                    items.map(item => ({
+                        user_id: user.id,
+                        name: item.name,
+                        description: item.description,
+                        front_image: item.front_image,
+                        back_image: item.back_image,
+                        type: item.type,
+                        country: item.country,
+                        continent: item.continent || item.continente || null,
+                        year: item.year,
+                        condition: item.condition,
+                        notes: item.notes,
+                        added_by: item.added_by,
+                        added_date: item.added_date
+                    }))
                 )
                 .select();
 
@@ -778,12 +700,11 @@ async function importCollection(file) {
                 return;
             }
 
-            appState.collection = data || [];
+            appState.collection = data;
             renderCollection();
-            alert('Collezione importata con successo!');
+            updateStats();
         } catch (error) {
-            console.error('Error parsing JSON or CSV:', error);
-            alert(`Errore durante l'importazione della collezione: ${error.message}`);
+            console.error('Error importing collection:', error);
         }
     };
     reader.readAsText(file);
