@@ -249,65 +249,27 @@ async function uploadImage(file, userId) {
         return null;
     }
     
-    console.log('Starting upload process:', {
-        fileName: file.name,
-        userId: userId,
-        fileSize: file.size,
-        fileType: file.type,
-        file: file
-    });
-    
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
     const filePath = `${userId}/${fileName}`;
     
-    console.log('Upload path:', filePath);
-    
     try {
-        console.log('Attempting to upload file to Supabase storage...');
         const { data, error } = await supabase.storage
             .from('collection-images')
             .upload(filePath, file);
             
         if (error) {
             console.error('Error uploading image:', error);
-            console.error('Error details:', {
-                message: error.message,
-                statusCode: error.statusCode,
-                name: error.name,
-                details: error.details,
-                hint: error.hint
-            });
             return null;
         }
         
-        console.log('Upload successful, storage response:', data);
-        
-        console.log('Generating public URL...');
         const { data: { publicUrl } } = supabase.storage
             .from('collection-images')
             .getPublicUrl(filePath);
         
-        // Assicuriamoci che l'URL sia assoluto e funzionante
-        const absoluteUrl = new URL(publicUrl, supabaseUrl).toString();
-        console.log('Generated absolute URL:', absoluteUrl);
-        
-        // Verifica che l'URL sia accessibile
-        try {
-            const response = await fetch(absoluteUrl, { method: 'HEAD' });
-            console.log('URL accessibility check:', {
-                status: response.status,
-                ok: response.ok,
-                url: absoluteUrl
-            });
-        } catch (e) {
-            console.error('Error checking URL accessibility:', e);
-        }
-            
-        return absoluteUrl;
+        return publicUrl;
     } catch (error) {
         console.error('Exception during upload:', error);
-        console.error('Stack trace:', error.stack);
         return null;
     }
 }
@@ -711,7 +673,7 @@ async function importCollection(file) {
                 return;
             }
 
-            // Inserisci i nuovi elementi
+            // Inserisci i nuovi elementi mantenendo i dati originali
             const { data, error: insertError } = await supabase
                 .from('collection')
                 .insert(
@@ -721,8 +683,14 @@ async function importCollection(file) {
                         description: item.description,
                         front_image: item.front_image,
                         back_image: item.back_image,
+                        type: item.type,
+                        country: item.country,
+                        continent: item.continent || item.continente || null,
+                        year: item.year,
                         condition: item.condition,
-                        notes: item.notes
+                        notes: item.notes,
+                        added_by: item.added_by,
+                        added_date: item.added_date
                     }))
                 )
                 .select();
@@ -732,12 +700,11 @@ async function importCollection(file) {
                 return;
             }
 
-            appState.collection = data || [];
+            appState.collection = data;
             renderCollection();
-            alert('Collezione importata con successo!');
+            updateStats();
         } catch (error) {
-            console.error('Error parsing JSON:', error);
-            alert('Errore durante l\'importazione della collezione');
+            console.error('Error importing collection:', error);
         }
     };
     reader.readAsText(file);
@@ -952,19 +919,9 @@ function createItemElement(item) {
         return conditionMap[condition.toLowerCase()] || condition;
     };
 
-    // Assicuriamoci che gli URL delle immagini siano assoluti
-    const getAbsoluteUrl = (url) => {
-        if (!url) return null;
-        try {
-            return new URL(url, supabaseUrl).toString();
-        } catch (e) {
-            console.error('Error creating absolute URL:', e);
-            return url;
-        }
-    };
-
-    const frontImageUrl = getAbsoluteUrl(item.front_image);
-    const backImageUrl = getAbsoluteUrl(item.back_image);
+    // Usa direttamente gli URL delle immagini senza conversione
+    const frontImageUrl = item.front_image;
+    const backImageUrl = item.back_image;
 
     const div = document.createElement('div');
     div.className = 'collection-item';
@@ -972,13 +929,13 @@ function createItemElement(item) {
         <div class="collection-images">
             ${frontImageUrl ? `
                 <div class="collection-image">
-                    <img src="${frontImageUrl}" alt="${item.name} - Fronte">
+                    <img src="${frontImageUrl}" alt="${item.name} - Fronte" loading="lazy">
                     <span class="image-label">Fronte</span>
                 </div>
             ` : ''}
             ${backImageUrl ? `
                 <div class="collection-image">
-                    <img src="${backImageUrl}" alt="${item.name} - Retro">
+                    <img src="${backImageUrl}" alt="${item.name} - Retro" loading="lazy">
                     <span class="image-label">Retro</span>
                 </div>
             ` : ''}
