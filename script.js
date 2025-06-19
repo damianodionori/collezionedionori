@@ -242,144 +242,449 @@ async function loadCollection() {
     }
 }
 
-// Funzione per caricare un'immagine su Supabase Storage
-async function uploadImage(file, userId) {
-    if (!file) {
-        console.log('No file provided for upload');
-        return null;
+// Servizio Supabase Storage migliorato
+class SupabaseStorageService {
+    constructor() {
+        this.bucketName = 'collection-images';
+        this.supabase = supabase;
     }
-    
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-    const filePath = `${userId}/${fileName}`;
-    
-    try {
-        const { data, error } = await supabase.storage
-            .from('collection-images')
-            .upload(filePath, file);
-            
-        if (error) {
-            console.error('Error uploading image:', error);
+
+    /**
+     * Verifica lo stato di salute del servizio Supabase
+     * @returns 'Supabase service is healthy' se il servizio è funzionante, 'Supabase service is unhealthy' altrimenti
+     */
+    supabaseServiceHealth() {
+        try {
+            if (this.supabase && this.supabase.storage) {
+                return 'Supabase service is healthy';
+            }
+            return 'Supabase service is unhealthy';
+        } catch (error) {
+            console.error('Error checking Supabase health:', error);
+            return 'Supabase service is unhealthy';
+        }
+    }
+
+    /**
+     * Salva un file su Supabase Storage e restituisce il suo URL pubblico
+     * @param {File} file - Il file da salvare
+     * @param {string} userId - ID dell'utente per organizzare i file
+     * @returns {Promise<string>} L'URL pubblico del file salvato
+     * @throws {Error} Se il file non può essere salvato
+     */
+    async saveFileAndGetUrl(file, userId) {
+        if (!file) {
+            throw new Error('No file provided for upload');
+        }
+
+        if (!userId) {
+            throw new Error('User ID is required for file organization');
+        }
+
+        const contentType = file.type;
+        const fileExt = file.name.split('.').pop();
+        const random = Math.floor(Math.random() * 1000);
+        const fileName = `${Date.now()}_${random}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
+
+        try {
+            // Upload del file
+            const { data, error: uploadError } = await this.supabase.storage
+                .from(this.bucketName)
+                .upload(filePath, file, {
+                    contentType: contentType,
+                    cacheControl: '3600'
+                });
+
+            if (uploadError) {
+                throw new Error(`Upload failed: ${uploadError.message}`);
+            }
+
+            // Ottieni l'URL pubblico
+            const { data: { publicUrl } } = this.supabase.storage
+                .from(this.bucketName)
+                .getPublicUrl(filePath);
+
+            console.log(`File saved successfully: ${filePath}`);
+            return publicUrl;
+
+        } catch (error) {
+            console.error(`Error saving file to path: ${filePath}`, error);
+            throw new Error(`Error. Resource not saved. Path: ${filePath}. ${error.message}`);
+        }
+    }
+
+    /**
+     * Elimina i file specificati da Supabase Storage
+     * @param {string[]} imageUrls - Array di URL pubblici dei file da eliminare
+     * @throws {Error} Se qualsiasi file non può essere eliminato
+     */
+    async deleteFiles(imageUrls) {
+        if (!imageUrls || imageUrls.length === 0) {
+            console.log('No files to delete');
+            return;
+        }
+
+        const filesToDelete = [];
+
+        for (const url of imageUrls) {
+            if (!url) continue;
+
+            try {
+                // Estrai il percorso del file dall'URL
+                const filePath = this.extractFilePathFromUrl(url);
+                if (filePath) {
+                    filesToDelete.push(filePath);
+                }
+            } catch (error) {
+                console.error(`Error extracting file path from URL: ${url}`, error);
+            }
+        }
+
+        if (filesToDelete.length === 0) {
+            console.log('No valid file paths to delete');
+            return;
+        }
+
+        try {
+            const { data, error } = await this.supabase.storage
+                .from(this.bucketName)
+                .remove(filesToDelete);
+
+            if (error) {
+                throw new Error(`Bulk delete failed: ${error.message}`);
+            }
+
+            console.log(`Successfully deleted ${filesToDelete.length} files:`, filesToDelete);
+
+        } catch (error) {
+            console.error('Error deleting files:', error);
+            throw new Error(`Error. Resources not deleted. ${error.message}`);
+        }
+    }
+
+    /**
+     * Elimina una cartella e tutti i suoi contenuti
+     * @param {string} folderPath - Il percorso della cartella da eliminare
+     * @throws {Error} Se la cartella non può essere eliminata
+     */
+    async deleteFolder(folderPath) {
+        if (!folderPath) {
+            throw new Error('Folder path is required');
+        }
+
+        try {
+            // Lista tutti i file nella cartella
+            const { data: files, error: listError } = await this.supabase.storage
+                .from(this.bucketName)
+                .list(folderPath);
+
+            if (listError) {
+                throw new Error(`Error listing folder contents: ${listError.message}`);
+            }
+
+            if (!files || files.length === 0) {
+                console.log(`Folder ${folderPath} is empty or does not exist`);
+                return;
+            }
+
+            // Prepara i percorsi completi dei file da eliminare
+            const filesToDelete = files.map(file => `${folderPath}/${file.name}`);
+
+            // Elimina tutti i file nella cartella
+            const { data, error: deleteError } = await this.supabase.storage
+                .from(this.bucketName)
+                .remove(filesToDelete);
+
+            if (deleteError) {
+                throw new Error(`Error deleting folder contents: ${deleteError.message}`);
+            }
+
+            console.log(`Successfully deleted folder ${folderPath} with ${filesToDelete.length} files`);
+
+        } catch (error) {
+            console.error(`Error deleting folder ${folderPath}:`, error);
+            throw new Error(`Error deleting folder ${folderPath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Estrae il percorso del file dall'URL pubblico di Supabase
+     * @param {string} url - URL pubblico del file
+     * @returns {string|null} Il percorso del file o null se non può essere estratto
+     */
+    extractFilePathFromUrl(url) {
+        try {
+            // Gestisce diversi formati di URL di Supabase
+            if (url.includes('/object/public/')) {
+                return url.split('/object/public/')[1];
+            } else if (url.includes('/storage/v1/object/public/')) {
+                return url.split('/storage/v1/object/public/')[1];
+            } else {
+                // Fallback: cerca di estrarre il percorso dall'URL
+                const urlObj = new URL(url);
+                const pathParts = urlObj.pathname.split('/');
+                const bucketIndex = pathParts.findIndex(part => part === this.bucketName);
+                if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
+                    return pathParts.slice(bucketIndex + 1).join('/');
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error extracting file path from URL:', error);
             return null;
         }
-        
-        const { data: { publicUrl } } = supabase.storage
-            .from('collection-images')
-            .getPublicUrl(filePath);
-        
-        return publicUrl;
+    }
+
+    /**
+     * Verifica se un file esiste nel bucket
+     * @param {string} filePath - Il percorso del file da verificare
+     * @returns {Promise<boolean>} True se il file esiste, false altrimenti
+     */
+    async fileExists(filePath) {
+        try {
+            const { data, error } = await this.supabase.storage
+                .from(this.bucketName)
+                .list(filePath.split('/').slice(0, -1).join('/'));
+
+            if (error) {
+                console.error('Error checking file existence:', error);
+                return false;
+            }
+
+            const fileName = filePath.split('/').pop();
+            return data.some(file => file.name === fileName);
+
+        } catch (error) {
+            console.error('Error in fileExists:', error);
+            return false;
+        }
+    }
+}
+
+// Inizializza il servizio storage
+const storageService = new SupabaseStorageService();
+
+// Verifica lo stato del servizio all'avvio
+console.log('Storage service health:', storageService.supabaseServiceHealth());
+
+// Funzione wrapper per mantenere la compatibilità con il codice esistente
+async function uploadImage(file, userId) {
+    try {
+        return await storageService.saveFileAndGetUrl(file, userId);
     } catch (error) {
-        console.error('Exception during upload:', error);
+        console.error('Error in uploadImage wrapper:', error);
         return null;
     }
 }
 
+// Funzioni utility per la gestione degli errori
+function showErrorNotification(message, duration = 5000) {
+    const notification = document.createElement('div');
+    notification.className = 'error-notification';
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #dc3545;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+}
+
+function showSuccessNotification(message, duration = 3000) {
+    const notification = document.createElement('div');
+    notification.className = 'success-notification';
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #28a745;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+}
+
+// Aggiungi gli stili CSS per le notifiche
+const notificationStyles = document.createElement('style');
+notificationStyles.textContent = `
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(notificationStyles);
+
 // Funzione per aggiungere un elemento
 async function addItem(item) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+        showErrorNotification('Utente non autenticato');
+        return;
+    }
 
     console.log('Adding item with data:', item);
     console.log('User ID:', user.id);
 
-    // Carica le immagini su Storage e ottieni gli URL pubblici
-    const frontImageUrl = item.frontImage ? await uploadImage(item.frontImage, user.id) : null;
-    console.log('Front image URL:', frontImageUrl);
-    
-    const backImageUrl = item.backImage ? await uploadImage(item.backImage, user.id) : null;
-    console.log('Back image URL:', backImageUrl);
+    try {
+        // Carica le immagini su Storage e ottieni gli URL pubblici
+        const frontImageUrl = item.frontImage ? await storageService.saveFileAndGetUrl(item.frontImage, user.id) : null;
+        console.log('Front image URL:', frontImageUrl);
+        
+        const backImageUrl = item.backImage ? await storageService.saveFileAndGetUrl(item.backImage, user.id) : null;
+        console.log('Back image URL:', backImageUrl);
 
-    // Assicuriamoci che gli URL siano assoluti prima di salvarli
-    const absoluteFrontImageUrl = frontImageUrl ? new URL(frontImageUrl, supabaseUrl).toString() : null;
-    const absoluteBackImageUrl = backImageUrl ? new URL(backImageUrl, supabaseUrl).toString() : null;
+        // Assicuriamoci che gli URL siano assoluti prima di salvarli
+        const absoluteFrontImageUrl = frontImageUrl ? new URL(frontImageUrl, supabaseUrl).toString() : null;
+        const absoluteBackImageUrl = backImageUrl ? new URL(backImageUrl, supabaseUrl).toString() : null;
 
-    // Prepara i dati per l'inserimento
-    const itemData = {
-        user_id: user.id,
-        added_by: appState.currentUser.displayName,
-        name: item.name || null,
-        description: item.description || null,
-        front_image: absoluteFrontImageUrl,
-        back_image: absoluteBackImageUrl,
-        type: item.type || null,
-        country: item.country || null,
-        continent: item.continent || null,
-        year: item.year || null,
-        condition: item.condition || null,
-        notes: item.notes || null,
-        added_date: new Date().toISOString()
-    };
+        // Prepara i dati per l'inserimento
+        const itemData = {
+            user_id: user.id,
+            added_by: appState.currentUser.displayName,
+            name: item.name || null,
+            description: item.description || null,
+            front_image: absoluteFrontImageUrl,
+            back_image: absoluteBackImageUrl,
+            type: item.type || null,
+            country: item.country || null,
+            continent: item.continent || null,
+            year: item.year || null,
+            condition: item.condition || null,
+            notes: item.notes || null,
+            added_date: new Date().toISOString()
+        };
 
-    console.log('Prepared item data for insertion:', itemData);
+        console.log('Prepared item data for insertion:', itemData);
 
-    const { data, error } = await supabase
-        .from('collection')
-        .insert([itemData])
-        .select();
+        const { data, error } = await supabase
+            .from('collection')
+            .insert([itemData])
+            .select();
 
-    if (error) {
-        console.error('Error adding item:', error);
-        console.error('Error details:', {
-            message: error.message,
-            details: error.details,
-            hint: error.hint
-        });
-        return;
+        if (error) {
+            console.error('Error adding item:', error);
+            showErrorNotification(`Errore durante l'aggiunta: ${error.message}`);
+            return;
+        }
+
+        console.log('Item added successfully:', data);
+        appState.collection.push(data[0]);
+        renderCollection();
+        updateStats();
+        
+        // Aggiorna il menu a tendina dei paesi dopo aver aggiunto un nuovo elemento
+        await updateCountryDropdown();
+        
+        showSuccessNotification('Elemento aggiunto con successo!');
+        
+    } catch (error) {
+        console.error('Error in addItem:', error);
+        showErrorNotification(`Errore durante l'aggiunta: ${error.message}`);
     }
-
-    console.log('Item added successfully:', data);
-    appState.collection.push(data[0]);
-    renderCollection();
-    updateStats();
-    // Aggiorna il menu a tendina dei paesi dopo aver aggiunto un nuovo elemento
-    await updateCountryDropdown();
 }
 
 // Funzione per aggiornare un elemento
 async function updateItem(id, updatedItem) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Carica le nuove immagini su Storage se presenti
-    const frontImageUrl = updatedItem.frontImage instanceof File 
-        ? await uploadImage(updatedItem.frontImage, user.id)
-        : updatedItem.frontImage;
-    
-    const backImageUrl = updatedItem.backImage instanceof File
-        ? await uploadImage(updatedItem.backImage, user.id)
-        : updatedItem.backImage;
-
-    const { error } = await supabase
-        .from('collection')
-        .update({
-            name: updatedItem.name,
-            description: updatedItem.description,
-            front_image: frontImageUrl,
-            back_image: backImageUrl,
-            type: updatedItem.type,
-            country: updatedItem.country,
-            continent: updatedItem.continent,
-            year: updatedItem.year,
-            condition: updatedItem.condition,
-            notes: updatedItem.notes
-        })
-        .eq('id', id)
-        .eq('user_id', user.id);
-
-    if (error) {
-        console.error('Error updating item:', error);
+    if (!user) {
+        showErrorNotification('Utente non autenticato');
         return;
     }
 
-    const index = appState.collection.findIndex(item => item.id === id);
-    if (index !== -1) {
-        appState.collection[index] = { 
-            ...appState.collection[index], 
-            ...updatedItem,
-            front_image: frontImageUrl,
-            back_image: backImageUrl
-        };
-        renderCollection();
+    try {
+        // Carica le nuove immagini su Storage se presenti
+        const frontImageUrl = updatedItem.frontImage instanceof File 
+            ? await storageService.saveFileAndGetUrl(updatedItem.frontImage, user.id)
+            : updatedItem.frontImage;
+        
+        const backImageUrl = updatedItem.backImage instanceof File
+            ? await storageService.saveFileAndGetUrl(updatedItem.backImage, user.id)
+            : updatedItem.backImage;
+
+        const { error } = await supabase
+            .from('collection')
+            .update({
+                name: updatedItem.name,
+                description: updatedItem.description,
+                front_image: frontImageUrl,
+                back_image: backImageUrl,
+                type: updatedItem.type,
+                country: updatedItem.country,
+                continent: updatedItem.continent,
+                year: updatedItem.year,
+                condition: updatedItem.condition,
+                notes: updatedItem.notes
+            })
+            .eq('id', id)
+            .eq('user_id', user.id);
+
+        if (error) {
+            console.error('Error updating item:', error);
+            showErrorNotification(`Errore durante l'aggiornamento: ${error.message}`);
+            return;
+        }
+
+        const index = appState.collection.findIndex(item => item.id === id);
+        if (index !== -1) {
+            appState.collection[index] = { 
+                ...appState.collection[index], 
+                ...updatedItem,
+                front_image: frontImageUrl,
+                back_image: backImageUrl
+            };
+            renderCollection();
+            showSuccessNotification('Elemento aggiornato con successo!');
+        }
+        
+    } catch (error) {
+        console.error('Error in updateItem:', error);
+        showErrorNotification(`Errore durante l'aggiornamento: ${error.message}`);
     }
 }
 
@@ -429,23 +734,19 @@ async function deleteItem(id) {
         // Elimina le immagini dal bucket se esistono
         const imagesToDelete = [];
         if (item.front_image) {
-            const frontPath = item.front_image.split('/object/public/collection-images/')[1];
-            if (frontPath) imagesToDelete.push(frontPath);
+            imagesToDelete.push(item.front_image);
         }
         if (item.back_image) {
-            const backPath = item.back_image.split('/object/public/collection-images/')[1];
-            if (backPath) imagesToDelete.push(backPath);
+            imagesToDelete.push(item.back_image);
         }
+        
         if (imagesToDelete.length > 0) {
             try {
-                const { data, error } = await supabase.storage.from('collection-images').remove(imagesToDelete);
-                if (error) {
-                    console.error('Errore durante la cancellazione delle immagini dal bucket:', error);
-                } else {
-                    console.log('Immagini eliminate dal bucket:', imagesToDelete);
-                }
+                await storageService.deleteFiles(imagesToDelete);
+                console.log('Immagini eliminate dal bucket:', imagesToDelete);
             } catch (err) {
-                console.error('Eccezione durante la cancellazione delle immagini dal bucket:', err);
+                console.error('Errore durante la cancellazione delle immagini dal bucket:', err);
+                // Continua con l'eliminazione del record anche se le immagini non sono state eliminate
             }
         }
 
@@ -467,6 +768,8 @@ async function deleteItem(id) {
         appState.collection = appState.collection.filter(item => item.id !== id);
         renderCollection();
         updateStats();
+        
+        showSuccessNotification('Elemento eliminato con successo!');
     });
 
     // Aggiungi stili CSS inline per il nuovo modal
@@ -1614,3 +1917,168 @@ document.addEventListener('DOMContentLoaded', () => {
         saveAppState();
     });
 });
+
+// Funzioni utility aggiuntive per la gestione dello storage
+
+/**
+ * Pulisce i file orfani dal bucket di storage
+ * @param {string} userId - ID dell'utente per cui pulire i file
+ */
+async function cleanupOrphanedFiles(userId) {
+    try {
+        console.log(`Starting cleanup for user: ${userId}`);
+        
+        // Lista tutti i file dell'utente
+        const { data: files, error: listError } = await supabase.storage
+            .from('collection-images')
+            .list(userId);
+
+        if (listError) {
+            throw new Error(`Error listing user files: ${listError.message}`);
+        }
+
+        if (!files || files.length === 0) {
+            console.log('No files found for user');
+            return;
+        }
+
+        // Ottieni tutti gli URL delle immagini dalla collezione dell'utente
+        const { data: collectionItems, error: collectionError } = await supabase
+            .from('collection')
+            .select('front_image, back_image')
+            .eq('user_id', userId);
+
+        if (collectionError) {
+            throw new Error(`Error fetching collection: ${collectionError.message}`);
+        }
+
+        // Raccogli tutti gli URL validi dalla collezione
+        const validUrls = new Set();
+        collectionItems.forEach(item => {
+            if (item.front_image) validUrls.add(item.front_image);
+            if (item.back_image) validUrls.add(item.back_image);
+        });
+
+        // Trova i file orfani
+        const orphanedFiles = [];
+        for (const file of files) {
+            const filePath = `${userId}/${file.name}`;
+            const { data: { publicUrl } } = supabase.storage
+                .from('collection-images')
+                .getPublicUrl(filePath);
+            
+            if (!validUrls.has(publicUrl)) {
+                orphanedFiles.push(filePath);
+            }
+        }
+
+        if (orphanedFiles.length === 0) {
+            console.log('No orphaned files found');
+            return;
+        }
+
+        // Elimina i file orfani
+        const { data, error: deleteError } = await supabase.storage
+            .from('collection-images')
+            .remove(orphanedFiles);
+
+        if (deleteError) {
+            throw new Error(`Error deleting orphaned files: ${deleteError.message}`);
+        }
+
+        console.log(`Cleaned up ${orphanedFiles.length} orphaned files`);
+        showSuccessNotification(`Puliti ${orphanedFiles.length} file orfani`);
+
+    } catch (error) {
+        console.error('Error in cleanupOrphanedFiles:', error);
+        showErrorNotification(`Errore durante la pulizia: ${error.message}`);
+    }
+}
+
+/**
+ * Verifica lo stato completo del servizio Supabase
+ * @returns {Promise<Object>} Oggetto con lo stato dei vari servizi
+ */
+async function checkSupabaseHealth() {
+    const healthStatus = {
+        storage: 'unknown',
+        auth: 'unknown',
+        database: 'unknown',
+        overall: 'unknown'
+    };
+
+    try {
+        // Verifica storage
+        try {
+            const storageHealth = storageService.supabaseServiceHealth();
+            healthStatus.storage = storageHealth.includes('healthy') ? 'healthy' : 'unhealthy';
+        } catch (error) {
+            healthStatus.storage = 'unhealthy';
+        }
+
+        // Verifica auth
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            healthStatus.auth = error ? 'unhealthy' : 'healthy';
+        } catch (error) {
+            healthStatus.auth = 'unhealthy';
+        }
+
+        // Verifica database
+        try {
+            const { data, error } = await supabase
+                .from('collection')
+                .select('count')
+                .limit(1);
+            healthStatus.database = error ? 'unhealthy' : 'healthy';
+        } catch (error) {
+            healthStatus.database = 'unhealthy';
+        }
+
+        // Determina lo stato generale
+        const healthyServices = Object.values(healthStatus).filter(status => status === 'healthy').length;
+        const totalServices = Object.keys(healthStatus).length - 1; // Escludi 'overall'
+        
+        healthStatus.overall = healthyServices === totalServices ? 'healthy' : 'degraded';
+
+        console.log('Supabase health check:', healthStatus);
+        return healthStatus;
+
+    } catch (error) {
+        console.error('Error in health check:', error);
+        healthStatus.overall = 'unhealthy';
+        return healthStatus;
+    }
+}
+
+/**
+ * Mostra un report dettagliato dello stato del servizio
+ */
+async function showHealthReport() {
+    const health = await checkSupabaseHealth();
+    
+    const report = `
+        Stato Supabase:
+        - Storage: ${health.storage === 'healthy' ? '✅' : '❌'} ${health.storage}
+        - Autenticazione: ${health.auth === 'healthy' ? '✅' : '❌'} ${health.auth}
+        - Database: ${health.database === 'healthy' ? '✅' : '❌'} ${health.database}
+        - Stato generale: ${health.overall === 'healthy' ? '✅' : health.overall === 'degraded' ? '⚠️' : '❌'} ${health.overall}
+    `;
+    
+    console.log(report);
+    
+    // Mostra notifica con il risultato
+    if (health.overall === 'healthy') {
+        showSuccessNotification('Tutti i servizi Supabase sono funzionanti');
+    } else if (health.overall === 'degraded') {
+        showErrorNotification('Alcuni servizi Supabase hanno problemi');
+    } else {
+        showErrorNotification('Problemi critici con i servizi Supabase');
+    }
+}
+
+// Esponi le funzioni globalmente per debug
+window.storageService = storageService;
+window.cleanupOrphanedFiles = cleanupOrphanedFiles;
+window.checkSupabaseHealth = checkSupabaseHealth;
+window.showHealthReport = showHealthReport;
